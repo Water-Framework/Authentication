@@ -1,0 +1,18 @@
+meta {
+  name: Update Authentication entity
+  type: http
+  seq: 3
+}
+
+put {
+  url: http://localhost:8080/water/authentication
+  body: json
+  auth: none
+}
+
+body:json {
+  { 
+    "id":1,
+    "exampleField": "exampleField1"
+  }
+}

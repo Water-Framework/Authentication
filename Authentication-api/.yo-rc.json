@@ -1,0 +1,9 @@
+{
+    "generator-water": {
+        "inner-project": true,
+        "project-type": "api",
+        "projectName": "Authentication",
+        "projectGroupId": "it.water.authentication",
+        "projectVersion": "3.0.0"
+    }
+}

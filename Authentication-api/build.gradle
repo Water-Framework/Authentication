@@ -1,0 +1,23 @@
+dependencies {
+	//SLF4J
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: project.slf4jVersion
+	//Atteo
+	implementation 'org.atteo.classindex:classindex:' + project.atteoClassIndexVersion
+	annotationProcessor('org.atteo.classindex:classindex:' + project.atteoClassIndexVersion)
+	//Water Core dependencies
+    implementation group: "it.water.core", name: "Core-api", version: project.waterVersion
+	implementation group: "it.water.core", name:"Core-interceptors", version:project.waterVersion
+	//Rest services
+	implementation group: "it.water.service.rest", name: "Rest-api", version: project.waterVersion
+	// https://mvnrepository.com/artifact/io.swagger/swagger-jaxrs
+    implementation group: 'io.swagger', name: 'swagger-jaxrs', version: project.swaggerJaxRsVersion
+}
+
+publishing {
+    	publications {
+        	hyperiot(MavenPublication) {
+            	from components.java
+        }
+    }
+ }
+ 
