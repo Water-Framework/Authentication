@@ -1,4 +1,4 @@
-Bundle-Name: Authentication Service Bundle
+Bundle-Name: Water Authentication Service Bundle
 Bundle-SymbolicName: Authentication
 Bundle-Activator: it.water.implementation.osgi.bundle.WaterBundleActivator
 Import-Package: \
@@ -8,19 +8,15 @@ Import-Package: \
     org.slf4j.*,\
     org.apache.aries.jpa.*,\
     org.apache.aries.cdi.*,\
-    org.hibernate.proxy;version='[5,6)',\
-    org.hibernate.validator;version='${range;[=,+)}',\
-    org.hibernate.validator.*;version='${range;[=,+)}',\
-    org.hibernate.annotations;version='[5,6)',\
     javassist.util.proxy,\
     jakarta.validation,\
     jakarta.validation.*,\
     it.water.core.*,\
     it.water.repository.*,\
     it.water.service.rest.*,\
-    it.water.implementation.osgi.*
+    it.water.implementation.osgi.*,\
+    it.water.user.model;resolution:=optional
 Export-Package: \
     it.water.authentication.*
 DynamicImport-Package: *
 -cdiannotations: *;discover=annotated_by_bean
--fixupmessages "Classes found in the wrong directory"; restrict:=error; is:=warning

@@ -46,6 +46,7 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
     @Override
     public Authenticable login(String username, String password, String issuerName) {
         Collection<AuthenticationProvider> authenticationProviders = componentRegistry.findComponents(AuthenticationProvider.class, null);
+        //finds the one with highest priority for the specific issuer
         Optional<AuthenticationProvider> authenticationProviderOpt = authenticationProviders.stream().filter(authenticationProvider -> authenticationProvider.issuersNames().contains(issuerName)).findFirst();
         if (authenticationProviderOpt.isEmpty())
             throw new UnauthorizedException("No authentication provider found for " + issuerName);
