@@ -1,0 +1,21 @@
+meta {
+  name: Login
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{address}}/{{contextRoot}}/authentication/login
+  body: formUrlEncoded
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:form-urlencoded {
+  username: admin
+  password: admin
+}
