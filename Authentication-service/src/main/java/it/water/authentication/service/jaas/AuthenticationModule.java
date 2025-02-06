@@ -46,7 +46,7 @@ public abstract class AuthenticationModule implements LoginModule {
     protected CallbackHandler callbackHandler;
     protected String user;
     protected Authenticable loggedUser;
-    protected final Set<Principal> principals = new HashSet<Principal>();
+    protected final Set<Principal> principals = new HashSet<>();
     protected boolean loginSucceeded;
     protected List<String> groups;
     protected Collection<? extends Role> roles;
@@ -66,6 +66,7 @@ public abstract class AuthenticationModule implements LoginModule {
     @Override
     public boolean login() throws LoginException {
         log.debug("Invoking HyperIoTJAAS Login...");
+        this.loggedUser = null;
         Callback[] callbacks = new Callback[2];
         callbacks[0] = new NameCallback("Username: ");
         callbacks[1] = new PasswordCallback("Password: ", false);
@@ -110,12 +111,12 @@ public abstract class AuthenticationModule implements LoginModule {
         return result;
     }
 
-    protected boolean doCommit() throws LoginException {
+    protected boolean doCommit() {
         log.debug(
-                "Committing login for user {} login successed: {}", new Object[]{user, loginSucceeded});
+                "Committing login for user {} login successed: {}", user, loginSucceeded);
         boolean result = loginSucceeded;
         if (result) {
-            log.debug("Adding new Principal {}", this.loggedUser.toString());
+            log.debug("Adding new Principal {}", this.loggedUser);
 
             principals.add(new UserPrincipal(this.loggedUser.getPassword(), this.loggedUser.isAdmin(), this.loggedUser.getLoggedEntityId(), this.loggedUser.getIssuer()));
 
@@ -126,11 +127,6 @@ public abstract class AuthenticationModule implements LoginModule {
             setAdditionalPrincipals(principals);
         }
         return result;
-    }
-
-    protected void setAdditionalPrincipals(Set<Principal> principals) {
-        //can be overridden
-        return;
     }
 
     @Override
@@ -159,17 +155,14 @@ public abstract class AuthenticationModule implements LoginModule {
         try {
             this.loggedUser = this.login(username, password);
         } catch (Exception e) {
-            log.warn("Error while logging in {}: {}", new Object[]{username, e.getMessage()});
+            this.loggedUser = null;
+            log.warn("Error while logging in {}: {}", username, e.getMessage());
         }
         if (loggedUser == null || !loggedUser.isActive())
             return false;
         roles = getRoles(loggedUser);
         this.postAuthentication(loggedUser);
         return true;
-    }
-
-    protected void postAuthentication(Authenticable authenticated) {
-        // DO NOTHING
     }
 
     private Authenticable login(String username, String password) throws FailedLoginException {
@@ -179,6 +172,18 @@ public abstract class AuthenticationModule implements LoginModule {
             throw new FailedLoginException(e.getMessage());
         }
     }
+
+    /**
+     * @param authenticated
+     */
+    protected abstract void postAuthentication(Authenticable authenticated);
+
+    /**
+     * Add more principals after login successed
+     *
+     * @param principals
+     */
+    protected abstract void setAdditionalPrincipals(Set<Principal> principals);
 
     /**
      * Retrieve Roles for specific issuer

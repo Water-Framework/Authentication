@@ -22,7 +22,6 @@ import it.water.core.api.service.rest.FrameworkRestApi;
 import it.water.core.api.service.rest.WaterJsonView;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -39,5 +38,5 @@ public interface AuthenticationSpringRestApi extends AuthenticationRestApi {
     @PostMapping(path = "/login", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @JsonView(WaterJsonView.Public.class)
     @Override
-    Map<String, String> login(@RequestParam("username") String username,@RequestParam("password") String password);
+    Map<String, String> login(@RequestParam("username") String username, @RequestParam("password") String password);
 }

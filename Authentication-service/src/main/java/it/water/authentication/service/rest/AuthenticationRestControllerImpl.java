@@ -31,7 +31,7 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
         log.debug("User {} is logging in ...", username);
         Map<String, String> response = new HashMap<>();
         Authenticable authenticable = authenticationApi.login(username, password);
-        log.debug("User has logged in succesfully at: ", username, Instant.now());
+        log.debug("User has logged in succesfully at: {} - {}", username, Instant.now());
         String token = authenticationApi.generateToken(authenticable);
         response.put("token", token);
         return response;
