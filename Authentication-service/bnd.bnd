@@ -12,9 +12,9 @@ Import-Package: \
     jakarta.validation,\
     jakarta.validation.*,\
     it.water.core.*,\
-    it.water.repository.*,\
     it.water.service.rest.*,\
     it.water.implementation.osgi.*,\
+    it.water.repository.*;resolution:=optional,\
     it.water.user.model;resolution:=optional
 Export-Package: \
     it.water.authentication.*
