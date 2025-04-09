@@ -41,5 +41,5 @@
 			"publishRepoUrl": "https://nexus.acsoftware.it/nexus/repository/maven-water/",
 			"publishRepoHasCredentials": true,
 			"parent-project": true
-}
+ }
 }

@@ -52,8 +52,8 @@ allprojects {
 sonarqube {
     properties {
         // Configurazione globale del progetto Sonar
-        property "sonar.projectKey", "water-Authentication"
-        property "sonar.projectName", "water-Authentication"
+        property "sonar.projectKey", "water.Authentication"
+        property "sonar.projectName", "water.Authentication"
         property "sonar.projectVersion", project.waterVersion
 
         // Includes all folder and sources for submodules
