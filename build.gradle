@@ -7,7 +7,7 @@ allprojects {
     project.ext.publishRepoUrl = "https://nexus.acsoftware.it/nexus/repository/maven-water/"
     project.ext.publishRepoUsername = System.getProperty("publishRepoUsername", "noUser")
     project.ext.publishRepoPassword = System.getProperty("publishRepoPassword", "noPassword")
-    project.ext.AuthenticationVersion = '3.0.0'
+    project.ext.AuthenticationVersion = project.waterVersion
     group 'it.water.authentication'
     version project.AuthenticationVersion
     repositories {
@@ -17,13 +17,7 @@ allprojects {
             url "https://plugins.gradle.org/m2/"
         }
         maven {
-
-            credentials {
-                username project.publishRepoUsername
-                password project.publishRepoPassword
-            }
-            name = project.publishRepoName
-            url = project.publishRepoUrl
+            url project.acsMavenRepository
         }
     }
 
