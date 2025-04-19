@@ -14,3 +14,4 @@ gradlew
 gradlew.bat
 /gradle
 .gradle
+/Authentication-service/src/main/resources/bruno/environments/local.bru
