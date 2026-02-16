@@ -4,6 +4,34 @@
 
 The Authentication module provides a comprehensive authentication system for the Water Framework. It handles user authentication through multiple providers, JWT token generation, and JAAS integration. The module supports both REST API and system-level authentication, allowing applications to authenticate users and generate secure tokens for subsequent API calls.
 
+## Architecture Overview
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant AuthRestApi
+    participant AuthApi
+    participant AuthProvider
+    participant JwtTokenService
+
+    Client->>AuthRestApi: POST /authentication/login (username, password)
+    AuthRestApi->>AuthApi: login(username, password)
+    AuthApi->>AuthProvider: authenticate(username, password)
+    AuthProvider-->>AuthApi: Authenticable user
+    AuthApi->>JwtTokenService: generateJwtToken(user)
+    JwtTokenService-->>AuthApi: JWT token
+    AuthApi-->>AuthRestApi: token
+    AuthRestApi-->>Client: { "token": "eyJ..." }
+```
+
+## Sub-modules
+
+| Sub-module | Description |
+|---|---|
+| **Authentication-api** | Defines `AuthenticationApi`, `AuthenticationSystemApi`, `AuthenticationRestApi`, `AuthenticationProvider`, and `AuthenticationOption` |
+| **Authentication-service** | Service implementations, JAAS `AuthenticationModule`, and REST controller |
+| **Authentication-service-spring** | Spring-specific REST controller and configuration |
+
 ## Module Technical Characteristics
 
 The Authentication module is built using the following technologies and patterns:
