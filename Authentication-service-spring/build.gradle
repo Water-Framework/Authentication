@@ -63,4 +63,10 @@ publishing {
         	}
     }
  }
- 
+
+waterDescriptor {
+    moduleId    = 'it.water.authentication.spring'
+    displayName = 'Authentication Service Spring'
+    description = 'Spring Boot runtime variant of Authentication Service'
+    inheritsFrom project(':Authentication-service')
+}

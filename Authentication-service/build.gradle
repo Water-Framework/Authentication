@@ -88,3 +88,25 @@ publishing {
         	}
     }
  }
+
+waterDescriptor {
+    moduleId    = 'it.water.authentication'
+    displayName = 'Authentication Service'
+    description = 'Handles login, JWT token generation/validation and multi-provider authentication routing'
+
+    properties {
+        property('water.authentication.service.issuer') {
+            type         = 'string'
+            envVar       = 'WATER_AUTHENTICATION_SERVICE_ISSUER'
+            required     = true
+            sensitive    = false
+            defaultValue = 'water'
+            description  = 'Default issuer identifier — must match the issuer of an active AuthenticationProvider'
+        }
+    }
+
+    input {
+        standardPin 'authentication-issuer'
+        standardPin 'service-discovery'
+    }
+}
