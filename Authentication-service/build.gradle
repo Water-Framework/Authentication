@@ -96,6 +96,7 @@ waterDescriptor {
 
     properties {
         property('water.authentication.service.issuer') {
+            name         = 'Token Issuer'
             type         = 'string'
             envVar       = 'WATER_AUTHENTICATION_SERVICE_ISSUER'
             required     = true
