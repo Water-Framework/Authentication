@@ -101,7 +101,7 @@ waterDescriptor {
             envVar       = 'WATER_AUTHENTICATION_SERVICE_ISSUER'
             required     = true
             sensitive    = false
-            defaultValue = 'water'
+            defaultValue = 'water.authentication.service.issuer'
             description  = 'Default issuer identifier — must match the issuer of an active AuthenticationProvider'
         }
     }
