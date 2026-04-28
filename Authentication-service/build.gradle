@@ -93,6 +93,7 @@ waterDescriptor {
     moduleId    = 'it.water.authentication'
     displayName = 'Authentication Service'
     description = 'Handles login, JWT token generation/validation and multi-provider authentication routing'
+    componentsPackage = 'it.water.authentication.service'
 
     properties {
         property('water.authentication.service.issuer') {
