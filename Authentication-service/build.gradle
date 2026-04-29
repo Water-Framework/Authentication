@@ -1,4 +1,4 @@
-plugins {
+ok plugins {
     id "biz.aQute.bnd.builder"
 }
 
@@ -104,6 +104,42 @@ waterDescriptor {
             sensitive    = false
             defaultValue = 'water.authentication.service.issuer'
             description  = 'Default issuer identifier — must match the issuer of an active AuthenticationProvider'
+        }
+o        property('water.keystore.password') {
+            name         = 'Keystore Password'
+            type         = 'string'
+            envVar       = 'WATER_KEYSTORE_PASSWORD'
+            required     = true
+            sensitive    = true
+            defaultValue = 'water.'
+            description  = 'Password for the keystore used to sign JWT tokens'
+        }
+        property('water.keystore.alias') {
+            name         = 'Keystore Alias'
+            type         = 'string'
+            envVar       = 'WATER_KEYSTORE_ALIAS'
+            required     = true
+            sensitive    = false
+            defaultValue = 'server-cert'
+            description  = 'Alias of the certificate entry inside the keystore'
+        }
+        property('water.keystore.file') {
+            name         = 'Keystore File Path'
+            type         = 'string'
+            envVar       = 'WATER_KEYSTORE_FILE'
+            required     = true
+            sensitive    = false
+            defaultValue = 'certs/server.keystore'
+            description  = 'Filesystem path to the keystore file used for JWT signing'
+        }
+        property('water.private.key.password') {
+            name         = 'Private Key Password'
+            type         = 'string'
+            envVar       = 'WATER_PRIVATE_KEY_PASSWORD'
+            required     = true
+            sensitive    = true
+            defaultValue = 'water.'
+            description  = 'Password for the private key entry inside the keystore'
         }
     }
 
