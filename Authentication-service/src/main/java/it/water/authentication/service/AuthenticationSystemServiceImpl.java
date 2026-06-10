@@ -1,7 +1,10 @@
 package it.water.authentication.service;
 
 import it.water.authentication.api.AuthenticationSystemApi;
+import it.water.authentication.api.LoginAttemptStore;
 import it.water.authentication.api.options.AuthenticationOption;
+import it.water.authentication.service.execption.AccountLockedException;
+import it.water.core.api.bundle.ApplicationProperties;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.api.security.Authenticable;
 import it.water.core.api.security.AuthenticationProvider;
@@ -37,6 +40,14 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
     @Setter
     private JwtTokenService jwtTokenService;
 
+    @Inject
+    @Setter
+    private LoginAttemptStore loginAttemptStore;
+
+    @Inject
+    @Setter
+    private ApplicationProperties applicationProperties;
+
     @Override
     public Authenticable login(String username, String password) {
         String issuerName = authenticationOption.getIssuerName();
@@ -45,12 +56,49 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
 
     @Override
     public Authenticable login(String username, String password, String issuerName) {
+        boolean lockoutEnabled = isLockoutEnabled();
+        String attemptKey = issuerName + ":" + username;
+
+        if (lockoutEnabled && loginAttemptStore.isLocked(attemptKey)) {
+            long remaining = loginAttemptStore.remainingLockMillis(attemptKey);
+            log.warn("Rejecting login for locked key '{}', {} ms remaining", attemptKey, remaining);
+            throw new AccountLockedException(remaining);
+        }
+
         Collection<AuthenticationProvider> authenticationProviders = componentRegistry.findComponents(AuthenticationProvider.class, null);
         //finds the one with highest priority for the specific issuer
         Optional<AuthenticationProvider> authenticationProviderOpt = authenticationProviders.stream().filter(authenticationProvider -> authenticationProvider.issuersNames().contains(issuerName)).findFirst();
         if (authenticationProviderOpt.isEmpty())
             throw new UnauthorizedException("No authentication provider found for " + issuerName);
-        return authenticationProviderOpt.get().login(username, password);
+
+        Authenticable authenticable;
+        try {
+            authenticable = authenticationProviderOpt.get().login(username, password);
+        } catch (RuntimeException loginError) {
+            if (lockoutEnabled)
+                loginAttemptStore.recordFailure(attemptKey);
+            throw loginError;
+        }
+
+        if (authenticable == null) {
+            //provider signalled failure without throwing
+            if (lockoutEnabled)
+                loginAttemptStore.recordFailure(attemptKey);
+            throw new UnauthorizedException("Invalid credentials");
+        }
+
+        if (lockoutEnabled)
+            loginAttemptStore.recordSuccess(attemptKey);
+        return authenticable;
+    }
+
+    //Lockout is disabled under water.testMode so repeated wrong logins in tests don't trip it
+    private boolean isLockoutEnabled() {
+        if (applicationProperties == null)
+            return true;
+        Object raw = applicationProperties.getProperty(AuthenticationConstants.TEST_MODE);
+        boolean testMode = raw != null && Boolean.parseBoolean(raw.toString().trim());
+        return !testMode;
     }
 
     @Override

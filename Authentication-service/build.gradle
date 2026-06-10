@@ -105,6 +105,33 @@ waterDescriptor {
             defaultValue = 'water.authentication.service.issuer'
             description  = 'Default issuer identifier — must match the issuer of an active AuthenticationProvider'
         }
+        property('water.authentication.login.lockout.threshold') {
+            name         = 'Login Lockout Threshold'
+            type         = 'integer'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_THRESHOLD'
+            required     = false
+            sensitive    = false
+            defaultValue = '5'
+            description  = 'Consecutive failed logins within the window before an account is locked (ignored when water.testMode=true)'
+        }
+        property('water.authentication.login.lockout.window.millis') {
+            name         = 'Login Lockout Window (ms)'
+            type         = 'long'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_WINDOW_MILLIS'
+            required     = false
+            sensitive    = false
+            defaultValue = '900000'
+            description  = 'Sliding window in milliseconds within which failed logins are counted (default 15 minutes)'
+        }
+        property('water.authentication.login.lockout.duration.millis') {
+            name         = 'Login Lockout Duration (ms)'
+            type         = 'long'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_DURATION_MILLIS'
+            required     = false
+            sensitive    = false
+            defaultValue = '900000'
+            description  = 'How long an account stays locked after the threshold is reached (default 15 minutes)'
+        }
     }
 
     input {

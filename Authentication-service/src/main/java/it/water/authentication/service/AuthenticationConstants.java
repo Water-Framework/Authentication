@@ -11,4 +11,12 @@ public class AuthenticationConstants {
     public static final String KEYSTORE_ALIAS = "water.keystore.alias";
     public static final String KEYSTORE_FILE = "water.keystore.file";
     public static final String PRIVATE_KEY_PASSWORD = "water.private.key.password";
+
+    //Framework-wide test mode flag; when true lockout enforcement is disabled
+    public static final String TEST_MODE = "water.testMode";
+
+    //H9 - login lockout configuration
+    public static final String LOGIN_LOCKOUT_THRESHOLD = "water.authentication.login.lockout.threshold";
+    public static final String LOGIN_LOCKOUT_WINDOW_MILLIS = "water.authentication.login.lockout.window.millis";
+    public static final String LOGIN_LOCKOUT_DURATION_MILLIS = "water.authentication.login.lockout.duration.millis";
 }
