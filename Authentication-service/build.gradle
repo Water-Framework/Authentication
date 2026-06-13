@@ -132,6 +132,15 @@ waterDescriptor {
             defaultValue = '900000'
             description  = 'How long an account stays locked after the threshold is reached (default 15 minutes)'
         }
+        property('water.authentication.login.lockout.max.keys') {
+            name         = 'Login Lockout Max Tracked Keys'
+            type         = 'integer'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_MAX_KEYS'
+            required     = false
+            sensitive    = false
+            defaultValue = '100000'
+            description  = 'Hard cap on keys tracked by the in-memory login attempt store; oldest entries are evicted beyond this to bound memory against credential stuffing'
+        }
     }
 
     input {

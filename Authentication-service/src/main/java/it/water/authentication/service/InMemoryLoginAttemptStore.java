@@ -22,6 +22,8 @@ public class InMemoryLoginAttemptStore implements LoginAttemptStore {
     private static final int DEFAULT_THRESHOLD = 5;
     private static final long DEFAULT_WINDOW_MILLIS = 15L * 60L * 1000L;   // 15 minutes
     private static final long DEFAULT_LOCKOUT_MILLIS = 15L * 60L * 1000L;  // 15 minutes
+    //hard cap on tracked keys to bound memory against credential-stuffing on arbitrary usernames
+    private static final int DEFAULT_MAX_KEYS = 100000;
 
     private final ConcurrentHashMap<String, Attempt> attempts = new ConcurrentHashMap<>();
 
@@ -29,10 +31,88 @@ public class InMemoryLoginAttemptStore implements LoginAttemptStore {
     @Setter
     private ApplicationProperties applicationProperties;
 
+    /**
+     * Per-key counter. Synchronization is encapsulated here (instance methods lock on {@code this}),
+     * so callers never synchronize on a parameter or a field they don't own.
+     */
     private static final class Attempt {
         private int failures;
         private long windowStart;
         private long lockedUntil;
+        //last time this entry was written; used by both eviction strategies
+        private long lastUpdate;
+
+        /**
+         * An entry is stale (safe to drop) once it is no longer locked AND its failure window has
+         * expired: from that moment it carries no security state and only consumes memory.
+         */
+        synchronized boolean isStale(long now, long windowMillis) {
+            return lockedUntil <= now && (now - windowStart) > windowMillis;
+        }
+
+        synchronized long lastUpdate() {
+            return lastUpdate;
+        }
+
+        synchronized boolean isLocked(long now) {
+            return lockedUntil > now;
+        }
+
+        synchronized long remainingLockMillis(long now) {
+            return Math.max(lockedUntil - now, 0L);
+        }
+
+        /**
+         * Applies one failure within the sliding window and locks the key once the threshold is
+         * reached. Returns the current failure count so the caller can log the lockout.
+         */
+        synchronized int recordFailure(long now, long windowMillis, int threshold, long lockoutMillis) {
+            // if window expired, restart it
+            if (now - windowStart > windowMillis) {
+                windowStart = now;
+                failures = 0;
+            }
+            failures++;
+            lastUpdate = now;
+            if (failures >= threshold) {
+                lockedUntil = now + lockoutMillis;
+            }
+            return failures;
+        }
+    }
+
+    private int maxKeys() {
+        return intProp(AuthenticationConstants.LOGIN_LOCKOUT_MAX_KEYS, DEFAULT_MAX_KEYS);
+    }
+
+    private boolean isStale(Attempt a, long now) {
+        return a.isStale(now, windowMillis());
+    }
+
+    /**
+     * Opportunistic, bounded cleanup invoked on writes:
+     * 1) drop entries whose window expired and are not locked;
+     * 2) if still above the cap, evict the least-recently-updated entries until under the cap.
+     * Locked entries are preserved as long as possible so eviction can never silently unlock a key.
+     */
+    private void evictIfNeeded() {
+        long now = now();
+        // pass 1: remove stale entries (no live security state)
+        attempts.entrySet().removeIf(e -> isStale(e.getValue(), now));
+        int cap = maxKeys();
+        if (attempts.size() <= cap)
+            return;
+        // pass 2: cap enforcement — evict oldest (least-recently-updated) first
+        attempts.entrySet().stream()
+                .sorted((x, y) -> Long.compare(lastUpdateOf(x.getValue()), lastUpdateOf(y.getValue())))
+                .limit((long) attempts.size() - cap)
+                .map(java.util.Map.Entry::getKey)
+                .forEach(attempts::remove);
+        log.warn("Login attempt store exceeded {} keys; evicted oldest entries down to the cap", cap);
+    }
+
+    private long lastUpdateOf(Attempt a) {
+        return a.lastUpdate();
     }
 
     private int threshold() {
@@ -52,11 +132,7 @@ public class InMemoryLoginAttemptStore implements LoginAttemptStore {
         if (key == null)
             return false;
         Attempt a = attempts.get(key);
-        if (a == null)
-            return false;
-        synchronized (a) {
-            return a.lockedUntil > now();
-        }
+        return a != null && a.isLocked(now());
     }
 
     @Override
@@ -64,22 +140,18 @@ public class InMemoryLoginAttemptStore implements LoginAttemptStore {
         if (key == null)
             return;
         long now = now();
+        //bound memory before inserting a potentially-new key (credential stuffing on random usernames)
+        evictIfNeeded();
         Attempt a = attempts.computeIfAbsent(key, k -> {
             Attempt na = new Attempt();
             na.windowStart = now;
             return na;
         });
-        synchronized (a) {
-            // if window expired, restart it
-            if (now - a.windowStart > windowMillis()) {
-                a.windowStart = now;
-                a.failures = 0;
-            }
-            a.failures++;
-            if (a.failures >= threshold()) {
-                a.lockedUntil = now + lockoutMillis();
-                log.warn("Login lockout triggered for key '{}' after {} failures; locked for {} ms", key, a.failures, lockoutMillis());
-            }
+        int threshold = threshold();
+        long lockoutMillis = lockoutMillis();
+        int failures = a.recordFailure(now, windowMillis(), threshold, lockoutMillis);
+        if (failures >= threshold) {
+            log.warn("Login lockout triggered for key '{}' after {} failures; locked for {} ms", key, failures, lockoutMillis);
         }
     }
 
@@ -95,12 +167,7 @@ public class InMemoryLoginAttemptStore implements LoginAttemptStore {
         if (key == null)
             return 0L;
         Attempt a = attempts.get(key);
-        if (a == null)
-            return 0L;
-        synchronized (a) {
-            long remaining = a.lockedUntil - now();
-            return Math.max(remaining, 0L);
-        }
+        return a == null ? 0L : a.remainingLockMillis(now());
     }
 
     private long now() {

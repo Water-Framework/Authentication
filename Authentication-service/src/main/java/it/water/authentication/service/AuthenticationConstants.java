@@ -19,4 +19,6 @@ public class AuthenticationConstants {
     public static final String LOGIN_LOCKOUT_THRESHOLD = "water.authentication.login.lockout.threshold";
     public static final String LOGIN_LOCKOUT_WINDOW_MILLIS = "water.authentication.login.lockout.window.millis";
     public static final String LOGIN_LOCKOUT_DURATION_MILLIS = "water.authentication.login.lockout.duration.millis";
+    //M33 - hard cap on tracked keys in the in-memory store to bound memory usage
+    public static final String LOGIN_LOCKOUT_MAX_KEYS = "water.authentication.login.lockout.max.keys";
 }
