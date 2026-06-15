@@ -26,6 +26,8 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
     @Setter
     private AuthenticationApi authenticationApi;
 
+    private static final String BEARER_PREFIX = "Bearer ";
+
     @Override
     public Map<String, String> login(String username, String password) {
         log.debug("User {} is logging in ...", username);
@@ -35,5 +37,24 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
         String token = authenticationApi.generateToken(authenticable);
         response.put("token", token);
         return response;
+    }
+
+    @Override
+    public Map<String, String> logout(String authorization) {
+        //@LoggedIn has already validated the bearer token by the time we get here
+        String token = extractBearerToken(authorization);
+        authenticationApi.logout(token);
+        log.debug("Token revoked (logout) at: {}", Instant.now());
+        Map<String, String> response = new HashMap<>();
+        response.put("result", "ok");
+        return response;
+    }
+
+    private String extractBearerToken(String authorization) {
+        if (authorization == null)
+            return null;
+        if (authorization.startsWith(BEARER_PREFIX))
+            return authorization.substring(BEARER_PREFIX.length()).trim();
+        return authorization.trim();
     }
 }

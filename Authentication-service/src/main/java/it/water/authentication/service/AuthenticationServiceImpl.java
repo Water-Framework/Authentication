@@ -37,4 +37,9 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     public String generateToken(Authenticable authenticable) {
         return systemService.generateToken(authenticable);
     }
+
+    @Override
+    public void logout(String token) {
+        systemService.logout(token);
+    }
 }

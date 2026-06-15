@@ -105,4 +105,10 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
     public String generateToken(Authenticable authenticable) {
         return jwtTokenService.generateJwtToken(authenticable);
     }
+
+    @Override
+    public void logout(String token) {
+        //reuse the same token service used to generate tokens; revocation is idempotent/safe
+        jwtTokenService.revokeToken(token);
+    }
 }

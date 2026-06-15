@@ -6,14 +6,18 @@ import it.water.authentication.service.AuthenticationConstants;
 import it.water.authentication.service.execption.NoIssuerNameDefinedException;
 import it.water.core.api.bundle.ApplicationProperties;
 import it.water.core.api.bundle.Runtime;
+import it.water.core.api.model.User;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.api.security.Authenticable;
 import it.water.core.api.service.Service;
 import it.water.core.interceptors.annotations.Inject;
 import it.water.core.testing.utils.junit.WaterTestExtension;
+import it.water.service.rest.api.security.jwt.JwtTokenService;
 import lombok.Setter;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+
+import java.util.List;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
@@ -47,6 +51,10 @@ class AuthenticationApiTest implements Service {
     @Inject
     @Setter
     private Runtime runtime;
+
+    @Inject
+    @Setter
+    private JwtTokenService jwtTokenService;
 
     /**
      * Testing basic injection of basic component for authentication entity.
@@ -100,6 +108,67 @@ class AuthenticationApiTest implements Service {
         testCallbackHandler = new TestCallbackHandler(subjectKo);
         testAuthenticationModule.initialize(subjectKo, testCallbackHandler, new HashMap<>(), new HashMap<>());
         Assertions.assertThrows(FailedLoginException.class, testAuthenticationModule::login);
+    }
+
+    // -----------------------------------------------------------------------
+    // M13 — Logout / token revocation via AuthenticationApi
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(4)
+    void logout_revokedTokenValidatesFalse() {
+        // M13: login → generateToken → logout → validateToken must return false
+        Authenticable auth = authenticationApi.login("admin", "admin");
+        String token = authenticationApi.generateToken(auth);
+        List<String> validIssuers = List.of(User.class.getName());
+        Assertions.assertTrue(
+                jwtTokenService.validateToken(validIssuers, token),
+                "Pre-condition: freshly generated token must be valid");
+
+        authenticationApi.logout(token);
+
+        Assertions.assertFalse(
+                jwtTokenService.validateToken(validIssuers, token),
+                "After logout, the token must no longer validate (M13)");
+    }
+
+    @Test
+    @Order(5)
+    void logout_nullToken_doesNotThrow() {
+        // M13: logout is idempotent/safe — null must not surface an exception
+        Assertions.assertDoesNotThrow(() -> authenticationApi.logout(null),
+                "logout(null) must not throw");
+    }
+
+    @Test
+    @Order(6)
+    void logout_blankToken_doesNotThrow() {
+        Assertions.assertDoesNotThrow(() -> authenticationApi.logout(""),
+                "logout('') must not throw");
+    }
+
+    @Test
+    @Order(7)
+    void logout_garbageToken_doesNotThrow() {
+        Assertions.assertDoesNotThrow(() -> authenticationApi.logout("not.a.jwt.token"),
+                "logout with garbage input must not throw");
+    }
+
+    @Test
+    @Order(8)
+    void logout_idempotent_logoutSameTokenTwice() {
+        // Calling logout twice on the same token must not throw and the token must stay invalid
+        Authenticable auth = authenticationApi.login("admin", "admin");
+        String token = authenticationApi.generateToken(auth);
+        List<String> validIssuers = List.of(User.class.getName());
+
+        Assertions.assertDoesNotThrow(() -> authenticationApi.logout(token),
+                "First logout must not throw");
+        Assertions.assertDoesNotThrow(() -> authenticationApi.logout(token),
+                "Duplicate logout must not throw (idempotent)");
+        Assertions.assertFalse(
+                jwtTokenService.validateToken(validIssuers, token),
+                "Token must remain invalid after duplicate logout");
     }
 
     private Subject createSubject(String username, String password) {

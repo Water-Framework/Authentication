@@ -33,4 +33,12 @@ public interface AuthenticationSystemApi extends BaseSystemApi {
      */
     String generateToken(Authenticable authenticable);
 
+    /**
+     * Logs out by revoking the supplied token (adds its jti to the revocation denylist until its
+     * natural expiry). Idempotent and safe on invalid/unparseable input.
+     *
+     * @param token raw JWT token to revoke
+     */
+    void logout(String token);
+
 }

@@ -8,8 +8,10 @@ import io.swagger.annotations.ApiResponses;
 import it.water.core.api.service.rest.FrameworkRestApi;
 import it.water.core.api.service.rest.RestApi;
 import it.water.core.api.service.rest.WaterJsonView;
+import it.water.service.rest.api.security.LoggedIn;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
@@ -32,4 +34,14 @@ public interface AuthenticationRestApi extends RestApi {
             @ApiResponse(code = 200, message = "login successed")})
     @JsonView(WaterJsonView.Public.class)
     Map<String,String> login(@FormParam("username") String username, @FormParam("password") String password);
+
+    @POST
+    @Path("/logout")
+    @Produces(MediaType.APPLICATION_JSON)
+    @LoggedIn
+    @ApiOperation(value = "/authentication/logout", response = String.class, notes = "Revokes the current JWT token (logout)", httpMethod = "POST", produces = "application/json")
+    @ApiResponses(value = {@ApiResponse(code = 401, message = "not authenticated"),
+            @ApiResponse(code = 200, message = "logout successed")})
+    @JsonView(WaterJsonView.Public.class)
+    Map<String,String> logout(@HeaderParam(HttpHeaders.AUTHORIZATION) String authorization);
 }
