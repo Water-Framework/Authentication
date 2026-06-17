@@ -154,8 +154,33 @@ class AuthenticationApiTest implements Service {
                 "logout with garbage input must not throw");
     }
 
+    /**
+     * #40 — smoke test: AuthenticationSystemApi must be fully activated (no exception during
+     * activation) when water.testMode=true.
+     *
+     * <p>The Water test runtime activates all {@code @FrameworkComponent}s before the first test
+     * executes, so any exception thrown from {@code onActivate()} would have already failed the
+     * test class setup. This test makes the intent explicit and provides a labelled coverage anchor
+     * for the fix. The WARN log output itself is verified in
+     * {@code AuthenticationSystemServiceOnActivateTest} via a Mockito unit test.
+     */
     @Test
     @Order(8)
+    void onActivate_testModeTrue_authenticationSystemApiIsFullyActivatedWithoutError() {
+        // The component registry holds the activated instance; retrieving it confirms activation succeeded.
+        AuthenticationSystemApi systemApi = componentRegistry.findComponent(AuthenticationSystemApi.class, null);
+        Assertions.assertNotNull(systemApi,
+                "#40: AuthenticationSystemApi must be findable in the registry — activation must have succeeded");
+        // Confirm the runtime properties carry testMode=true (so the WARN path was exercised during activation)
+        Object testModeValue = applicationProperties.getProperty(AuthenticationConstants.TEST_MODE);
+        Assertions.assertNotNull(testModeValue,
+                "#40: water.testMode property must be present in the test environment");
+        Assertions.assertTrue(Boolean.parseBoolean(testModeValue.toString().trim()),
+                "#40: water.testMode must be true in this test run so the onActivate WARN path is exercised");
+    }
+
+    @Test
+    @Order(9)
     void logout_idempotent_logoutSameTokenTwice() {
         // Calling logout twice on the same token must not throw and the token must stay invalid
         Authenticable auth = authenticationApi.login("admin", "admin");

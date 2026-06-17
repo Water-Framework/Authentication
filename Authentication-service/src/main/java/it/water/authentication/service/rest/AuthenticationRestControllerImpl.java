@@ -1,7 +1,9 @@
 package it.water.authentication.service.rest;
 
 import it.water.authentication.api.AuthenticationApi;
+import it.water.authentication.api.options.AuthenticationOption;
 import it.water.authentication.api.rest.AuthenticationRestApi;
+import it.water.authentication.service.ClientIpResolver;
 import it.water.core.api.security.Authenticable;
 import it.water.core.api.service.rest.FrameworkRestController;
 import it.water.core.interceptors.annotations.Inject;
@@ -9,9 +11,12 @@ import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.core.Context;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 
 /**
@@ -26,13 +31,23 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
     @Setter
     private AuthenticationApi authenticationApi;
 
+    @Inject
+    @Setter
+    private AuthenticationOption authenticationOption;
+
+    //#34/#37 - per-request HttpServletRequest (javax namespace, JAX-RS/CXF). Used only to read the immediate
+    //TCP peer and forwarding headers for the per-IP login lockout key. The Spring controller overrides
+    //resolveClientIp() to read the jakarta request instead.
+    @Context
+    private HttpServletRequest httpServletRequest;
+
     private static final String BEARER_PREFIX = "Bearer ";
 
     @Override
     public Map<String, String> login(String username, String password) {
         log.debug("User {} is logging in ...", username);
         Map<String, String> response = new HashMap<>();
-        Authenticable authenticable = authenticationApi.login(username, password);
+        Authenticable authenticable = authenticationApi.login(username, password, resolveClientIp());
         log.debug("User has logged in succesfully at: {} - {}", username, Instant.now());
         String token = authenticationApi.generateToken(authenticable);
         response.put("token", token);
@@ -48,6 +63,34 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
         Map<String, String> response = new HashMap<>();
         response.put("result", "ok");
         return response;
+    }
+
+    /**
+     * #34/#37 - Resolves the client IP used as the per-IP lockout key dimension. The JAX-RS/CXF runtime
+     * reads the per-request HttpServletRequest injected via {@code @Context} (javax servlet namespace).
+     * The trust decision (whether to honor X-Forwarded-For/X-Real-IP) is delegated to {@link ClientIpResolver}
+     * using the configured trusted proxies. The Spring controller overrides this to read the jakarta request.
+     * @return the resolved client IP, or null if it cannot be determined (system layer maps null to "unknown")
+     */
+    protected String resolveClientIp() {
+        String tcpSource = null;
+        String forwardedFor = null;
+        String realIp = null;
+        try {
+            if (httpServletRequest != null) {
+                tcpSource = httpServletRequest.getRemoteAddr();
+                forwardedFor = httpServletRequest.getHeader("X-Forwarded-For");
+                realIp = httpServletRequest.getHeader("X-Real-IP");
+            }
+        } catch (Exception e) {
+            log.trace("Unable to resolve client IP from JAX-RS request: {}", e.getMessage());
+        }
+        return ClientIpResolver.resolve(trustedProxies(), tcpSource, forwardedFor, realIp);
+    }
+
+    //#34/#37 - exposed so runtime subclasses (e.g. Spring) can apply the same trust policy with their own request type
+    protected Set<String> trustedProxies() {
+        return (authenticationOption != null) ? authenticationOption.getTrustedProxies() : Set.of();
     }
 
     private String extractBearerToken(String authorization) {

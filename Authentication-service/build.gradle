@@ -30,6 +30,9 @@ dependencies {
     implementation group: 'it.water.core', name: 'Core-security', version: project.waterVersion
     implementation group: 'it.water.core', name: 'Core-service', version: project.waterVersion
     
+	//Servlet API (provided by the servlet container/CXF stack at runtime) - needed only to read the
+	//immediate TCP peer (getRemoteAddr) and forwarding headers for the #34 per-IP login lockout key
+	compileOnly group: 'javax.servlet', name: 'javax.servlet-api', version: '4.0.1'
 	//Rest Water Deps
 	implementation group: 'it.water.service.rest', name: 'Rest-api', version: project.waterVersion
 	implementation group: 'it.water.service.rest', name: 'Rest-security', version: project.waterVersion
@@ -140,6 +143,42 @@ waterDescriptor {
             sensitive    = false
             defaultValue = '100000'
             description  = 'Hard cap on keys tracked by the in-memory login attempt store; oldest entries are evicted beyond this to bound memory against credential stuffing'
+        }
+        property('water.authentication.login.lockout.backoff.enabled') {
+            name         = 'Login Lockout Progressive Backoff'
+            type         = 'boolean'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_BACKOFF_ENABLED'
+            required     = false
+            sensitive    = false
+            defaultValue = 'true'
+            description  = 'When true, the lock duration grows progressively on repeated lockouts of the same key instead of staying fixed'
+        }
+        property('water.authentication.login.lockout.backoff.multiplier') {
+            name         = 'Login Lockout Backoff Multiplier'
+            type         = 'integer'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_BACKOFF_MULTIPLIER'
+            required     = false
+            sensitive    = false
+            defaultValue = '2'
+            description  = 'Exponential growth factor applied to the lock duration on each successive lockout of the same key'
+        }
+        property('water.authentication.login.lockout.max.duration.millis') {
+            name         = 'Login Lockout Max Duration (ms)'
+            type         = 'long'
+            envVar       = 'WATER_AUTHENTICATION_LOGIN_LOCKOUT_MAX_DURATION_MILLIS'
+            required     = false
+            sensitive    = false
+            defaultValue = '3600000'
+            description  = 'Upper bound on the lock duration when progressive backoff is enabled (default 1 hour)'
+        }
+        property('water.authentication.trusted.proxies') {
+            name         = 'Trusted Reverse Proxies'
+            type         = 'string'
+            envVar       = 'WATER_AUTHENTICATION_TRUSTED_PROXIES'
+            required     = false
+            sensitive    = false
+            defaultValue = ''
+            description  = 'CSV of trusted reverse-proxy IPs; X-Forwarded-For / X-Real-IP are honored only from these peers (empty = use direct TCP source only)'
         }
     }
 

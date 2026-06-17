@@ -15,6 +15,12 @@
  */
 package it.water.authentication;
 
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import it.water.authentication.api.AuthenticationApi;
 import it.water.core.api.model.User;
 import it.water.core.api.registry.ComponentRegistry;
@@ -27,7 +33,10 @@ import lombok.Setter;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * M13 unit tests for NimbusJwtTokenService.
@@ -197,5 +206,130 @@ class NimbusJwtTokenServiceTest implements Service {
         Assertions.assertFalse(
                 jwtTokenService.validateToken(VALID_ISSUERS, token),
                 "Token must still be revoked after duplicate revocation");
+    }
+
+    // -----------------------------------------------------------------------
+    // #15/#16 — aud + nbf emission, algorithm pinning, round-trip, nbf-future
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(14)
+    void generateToken_tokenContainsNonEmptyAudClaim() throws Exception {
+        // #15: generateClaims must emit an aud claim; it defaults to the issuer
+        String token = generateAdminToken();
+        SignedJWT signedJWT = SignedJWT.parse(token);
+        java.util.List<String> audience = signedJWT.getJWTClaimsSet().getAudience();
+        Assertions.assertNotNull(audience, "Generated token must carry a non-null aud claim");
+        Assertions.assertFalse(audience.isEmpty(), "Generated token aud claim must not be empty");
+        Assertions.assertFalse(audience.get(0).isBlank(),
+                "First aud entry must not be blank");
+    }
+
+    @Test
+    @Order(15)
+    void generateToken_tokenContainsNbfClaim() throws Exception {
+        // #15: generateClaims sets nbf = issueTime; assert it is present and <= now
+        String token = generateAdminToken();
+        SignedJWT signedJWT = SignedJWT.parse(token);
+        Date nbf = signedJWT.getJWTClaimsSet().getNotBeforeTime();
+        Assertions.assertNotNull(nbf, "Generated token must carry a non-null nbf claim");
+        long nowPlusLeeway = Instant.now().toEpochMilli() + 2_000L; // 2s tolerance for slow CI
+        Assertions.assertTrue(nbf.getTime() <= nowPlusLeeway,
+                "nbf must not be more than 2 s in the future (it should equal issue time)");
+    }
+
+    @Test
+    @Order(16)
+    void generateToken_nbfClaimEqualsIssueTime() throws Exception {
+        // #15: nbf is set to issueTime in generateClaims — verify they are equal
+        String token = generateAdminToken();
+        SignedJWT signedJWT = SignedJWT.parse(token);
+        JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
+        Date nbf = claims.getNotBeforeTime();
+        Date iat = claims.getIssueTime();
+        Assertions.assertNotNull(nbf, "nbf must be present");
+        Assertions.assertNotNull(iat, "iat must be present");
+        // nbf is set to the same Date object as iat; allow 1 s tolerance for clock resolution
+        long diffMillis = Math.abs(nbf.getTime() - iat.getTime());
+        Assertions.assertTrue(diffMillis < 1_000L,
+                "nbf must equal iat (within 1 s); actual diff=" + diffMillis + " ms");
+    }
+
+    @Test
+    @Order(17)
+    void generateToken_roundTripValidation_passesWithAudAndNbf() {
+        // #15: a freshly generated token (which now carries aud + nbf) must still pass validateToken
+        // This ensures aud/nbf validation logic in verifySignature does not regress
+        String token = generateAdminToken();
+        Assertions.assertTrue(
+                jwtTokenService.validateToken(VALID_ISSUERS, token),
+                "Round-trip: a self-issued token with aud + nbf must still validate successfully (no regression)");
+    }
+
+    @Test
+    @Order(18)
+    void validateToken_nonRs256AlgorithmToken_returnsFalse() throws Exception {
+        // #15 algorithm pinning: a token signed with HS256 (or any non-RS256 alg) must be rejected
+        // by validateToken before any cryptographic check. We build an HS256-signed JWT using a
+        // 32-byte HMAC key and assert validateToken returns false.
+        byte[] hmacSecret = new byte[32];
+        new java.security.SecureRandom().nextBytes(hmacSecret);
+        JWSHeader hs256Header = new JWSHeader(JWSAlgorithm.HS256);
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject("admin")
+                .issuer(User.class.getName())
+                .audience(User.class.getName())
+                .expirationTime(Date.from(Instant.now().plusSeconds(3600)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        SignedJWT hs256Jwt = new SignedJWT(hs256Header, claims);
+        JWSSigner signer = new MACSigner(hmacSecret);
+        hs256Jwt.sign(signer);
+        String hs256Token = hs256Jwt.serialize();
+
+        Assertions.assertFalse(
+                jwtTokenService.validateToken(VALID_ISSUERS, hs256Token),
+                "A token signed with HS256 must be rejected by algorithm pinning (must not validate as RS256)");
+    }
+
+    @Test
+    @Order(19)
+    void validateToken_tokenWithNbfFarInFuture_returnsFalse() throws Exception {
+        // #15 nbf validation: a token whose nbf is far beyond the clock-skew leeway must be rejected.
+        // We generate a fresh valid token, parse it, re-sign a claims set with nbf = now + 1 hour
+        // using the service's own signing key (we cannot call generateClaims directly, so we build
+        // a fresh claims set with the same issuer/aud but an nbf 1 h in the future).
+        // Note: this requires signing with the private key loaded through the WaterTestExtension
+        // runtime. We obtain the key via EncryptionUtil which is injected by the framework.
+        it.water.core.api.security.EncryptionUtil encryptionUtil =
+                componentRegistry.findComponent(it.water.core.api.security.EncryptionUtil.class, null);
+        Assumptions.assumeTrue(encryptionUtil != null,
+                "EncryptionUtil must be available; skipping test if not registered");
+
+        java.security.interfaces.RSAPrivateKey privateKey =
+                (java.security.interfaces.RSAPrivateKey) encryptionUtil.getServerKeyPair().getPrivate();
+
+        long nowMillis = Instant.now().toEpochMilli();
+        // nbf is 1 hour in the future — well beyond the default 60 s clock skew
+        Date farFutureNbf = Date.from(Instant.ofEpochMilli(nowMillis + 3_600_000L));
+        JWTClaimsSet futureNbfClaims = new JWTClaimsSet.Builder()
+                .subject("admin")
+                .issuer(User.class.getName())
+                .audience(User.class.getName())
+                .expirationTime(Date.from(Instant.ofEpochMilli(nowMillis + 7_200_000L)))
+                .notBeforeTime(farFutureNbf)
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+
+        JWSHeader rs256Header = new JWSHeader.Builder(JWSAlgorithm.RS256).build();
+        SignedJWT futureNbfJwt = new SignedJWT(rs256Header, futureNbfClaims);
+        com.nimbusds.jose.crypto.RSASSASigner rs256Signer =
+                new com.nimbusds.jose.crypto.RSASSASigner(privateKey);
+        futureNbfJwt.sign(rs256Signer);
+        String futureNbfToken = futureNbfJwt.serialize();
+
+        Assertions.assertFalse(
+                jwtTokenService.validateToken(VALID_ISSUERS, futureNbfToken),
+                "A token whose nbf is 1 hour in the future must be rejected (nbf exceeds clock-skew leeway)");
     }
 }

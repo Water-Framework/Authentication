@@ -5,6 +5,7 @@ import it.water.authentication.api.LoginAttemptStore;
 import it.water.authentication.api.options.AuthenticationOption;
 import it.water.authentication.service.execption.AccountLockedException;
 import it.water.core.api.bundle.ApplicationProperties;
+import it.water.core.api.interceptors.OnActivate;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.api.security.Authenticable;
 import it.water.core.api.security.AuthenticationProvider;
@@ -48,16 +49,43 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
     @Setter
     private ApplicationProperties applicationProperties;
 
+    /**
+     * On component activation, emit a single prominent WARN if the framework is running in test mode.
+     * When water.testMode=true several security controls are intentionally relaxed (login lockout is
+     * disabled here, and REST JWT validation is typically disabled via water.rest.security.jwt.validate),
+     * so this must never be enabled in a production deployment.
+     */
+    @OnActivate
+    public void onActivate(ApplicationProperties applicationProperties) {
+        Object raw = (applicationProperties != null) ? applicationProperties.getProperty(AuthenticationConstants.TEST_MODE) : null;
+        boolean testMode = raw != null && Boolean.parseBoolean(raw.toString().trim());
+        if (testMode) {
+            log.warn("**************************************************************************************");
+            log.warn("* WATER TEST MODE IS ENABLED ({}=true)", AuthenticationConstants.TEST_MODE);
+            log.warn("* Security controls are DISABLED: login lockout is bypassed and REST JWT validation");
+            log.warn("* is typically turned off. DO NOT enable test mode in a production environment.");
+            log.warn("**************************************************************************************");
+        }
+    }
+
     @Override
     public Authenticable login(String username, String password) {
-        String issuerName = authenticationOption.getIssuerName();
-        return login(username, password, issuerName);
+        return login(username, password, authenticationOption.getIssuerName());
     }
 
     @Override
     public Authenticable login(String username, String password, String issuerName) {
+        //#34 - thin delegation; the real implementation lives in the 4-arg overload (no client IP here)
+        return login(username, password, issuerName, null);
+    }
+
+    @Override
+    public Authenticable login(String username, String password, String authProviderFilter, String clientIp) {
+        //#34 - resolve the issuer (null filter falls back to the default) and build an IP-scoped lockout key
+        String issuerName = (authProviderFilter != null) ? authProviderFilter : authenticationOption.getIssuerName();
+        String ipPart = (clientIp == null || clientIp.isBlank()) ? "unknown" : clientIp.trim();
+        String attemptKey = issuerName + ":" + ipPart + ":" + username; //#34 - lockout key: issuer:ip:username
         boolean lockoutEnabled = isLockoutEnabled();
-        String attemptKey = issuerName + ":" + username;
 
         if (lockoutEnabled && loginAttemptStore.isLocked(attemptKey)) {
             long remaining = loginAttemptStore.remainingLockMillis(attemptKey);

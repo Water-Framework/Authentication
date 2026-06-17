@@ -440,10 +440,288 @@ class InMemoryLoginAttemptStoreTest implements Service {
         applicationProperties.loadProperties(restore);
     }
 
+    // -----------------------------------------------------------------------
+    // #34 — progressive exponential backoff
+    // -----------------------------------------------------------------------
+
     /**
-     * M33-4: lockout continues to work correctly after an eviction cycle.
-     * This is a regression guard: eviction must not corrupt the counter state of surviving entries.
+     * #34-1 — backoff DISABLED: every lockout uses the base duration (constant behaviour, no escalation).
+     * We lock the same key twice; both lockouts must have a remaining duration <= base.
      */
+    @Test
+    @Order(18)
+    void backoffDisabled_lockoutDurationIsConstant() throws InterruptedException {
+        // 200 ms base, backoff off, multiplier irrelevant
+        Properties props = new Properties();
+        props.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        props.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        props.put("water.authentication.login.lockout.duration.millis", "200");
+        props.put("water.authentication.login.lockout.backoff.enabled", "false");
+        props.put("water.authentication.login.lockout.backoff.multiplier", "10"); // would multiply a lot, but backoff is off
+        props.put("water.authentication.login.lockout.max.duration.millis", "600000");
+        applicationProperties.loadProperties(props);
+
+        String key = TEST_KEY + "-backoffDisabled-" + System.nanoTime();
+
+        // First lockout
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: key must be locked after threshold failures");
+        long firstRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(firstRemaining > 0L && firstRemaining <= 200L,
+                "#34: first lockout remaining must be within [1,200] ms when backoff is disabled");
+
+        // Wait for the first lockout to expire
+        Thread.sleep(250L); //NOSONAR: necessary to expire the first lockout
+        Assertions.assertFalse(loginAttemptStore.isLocked(key), "#34: key must be unlocked after 200 ms");
+
+        // Second lockout — must also be <= 200 ms (constant, no escalation)
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: key must be locked on second lockout");
+        long secondRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(secondRemaining > 0L && secondRemaining <= 200L,
+                "#34: second lockout remaining must still be within [1,200] ms when backoff is disabled");
+
+        // Restore
+        restoreDefaultProps();
+    }
+
+    /**
+     * #34-2 — backoff ENABLED with multiplier=2: duration doubles on each successive lockout.
+     * First lockout: base (200 ms). Second lockout: base*2 (400 ms). The second remaining must
+     * be strictly greater than the first remaining measured immediately after each lockout.
+     */
+    @Test
+    @Order(19)
+    void backoffEnabled_durationDoublesOnSuccessiveLockouts() throws InterruptedException {
+        final long base = 200L;
+        final long maxDuration = 10_000L; // well above base*2, cap not exercised here
+        Properties props = new Properties();
+        props.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        props.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        props.put("water.authentication.login.lockout.duration.millis", String.valueOf(base));
+        props.put("water.authentication.login.lockout.backoff.enabled", "true");
+        props.put("water.authentication.login.lockout.backoff.multiplier", "2");
+        props.put("water.authentication.login.lockout.max.duration.millis", String.valueOf(maxDuration));
+        applicationProperties.loadProperties(props);
+
+        String key = TEST_KEY + "-backoffDoubles-" + System.nanoTime();
+
+        // First lockout: remaining must be <= base (200 ms)
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: first lockout must be active");
+        long firstRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(firstRemaining > 0L && firstRemaining <= base,
+                "#34: first remaining must be within (0, base=200] ms");
+
+        // Expire the first lockout
+        Thread.sleep(base + 50L); //NOSONAR: necessary to expire the first lockout
+        Assertions.assertFalse(loginAttemptStore.isLocked(key), "#34: key must be unlocked after base ms");
+
+        // Second lockout: remaining must be > base (200 ms) and <= base*2 (400 ms)
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: second lockout must be active");
+        long secondRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(secondRemaining > base,
+                "#34: second lockout duration must be strictly greater than base (exponential backoff; multiplier=2)");
+        Assertions.assertTrue(secondRemaining <= base * 2,
+                "#34: second lockout remaining must not exceed base*2=400 ms");
+
+        // Restore
+        restoreDefaultProps();
+    }
+
+    /**
+     * #34-3 — the cap is respected: once the computed duration reaches or exceeds maxLockoutMillis,
+     * it is clamped to maxLockoutMillis and does not grow further.
+     * We use base=200 ms, multiplier=10, max=300 ms. First lockout = 200 ms; second = min(2000,300)=300 ms.
+     * After the second lockout the remaining must be <= 300 ms (cap).
+     */
+    @Test
+    @Order(20)
+    void backoffEnabled_capIsRespected() throws InterruptedException {
+        final long base = 200L;
+        final long cap = 300L; // cap < base*10 — will be hit on the second lockout
+        Properties props = new Properties();
+        props.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        props.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        props.put("water.authentication.login.lockout.duration.millis", String.valueOf(base));
+        props.put("water.authentication.login.lockout.backoff.enabled", "true");
+        props.put("water.authentication.login.lockout.backoff.multiplier", "10");
+        props.put("water.authentication.login.lockout.max.duration.millis", String.valueOf(cap));
+        applicationProperties.loadProperties(props);
+
+        String key = TEST_KEY + "-backoffCap-" + System.nanoTime();
+
+        // First lockout
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        long firstRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(firstRemaining > 0L && firstRemaining <= base,
+                "#34: first lockout must be within (0, base=200]");
+
+        Thread.sleep(base + 50L); //NOSONAR: necessary to expire the first lockout
+        Assertions.assertFalse(loginAttemptStore.isLocked(key), "#34: must be unlocked after base ms");
+
+        // Second lockout — multiplier*base = 2000 ms > cap=300 ms; must be clamped to cap
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: second lockout must be active");
+        long secondRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(secondRemaining > 0L && secondRemaining <= cap,
+                "#34: second lockout must be capped at max=" + cap + " ms, got " + secondRemaining);
+
+        // Restore
+        restoreDefaultProps();
+    }
+
+    /**
+     * #34-4 — multiplier clamped to minimum 1: if backoff.multiplier is configured as 0 (or negative),
+     * the store clamps it to 1, meaning the duration is base * 1^n = base for all lockouts.
+     */
+    @Test
+    @Order(21)
+    void backoffMultiplierClampedToMinimumOne_durationDoesNotShrink() throws InterruptedException {
+        final long base = 200L;
+        Properties props = new Properties();
+        props.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        props.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        props.put("water.authentication.login.lockout.duration.millis", String.valueOf(base));
+        props.put("water.authentication.login.lockout.backoff.enabled", "true");
+        props.put("water.authentication.login.lockout.backoff.multiplier", "0"); // must be clamped to 1
+        props.put("water.authentication.login.lockout.max.duration.millis", "10000");
+        applicationProperties.loadProperties(props);
+
+        String key = TEST_KEY + "-backoffClamp-" + System.nanoTime();
+
+        // First lockout
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: first lockout active");
+        long firstRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(firstRemaining > 0L && firstRemaining <= base,
+                "#34: first lockout remaining must be within (0, base=200] ms");
+
+        Thread.sleep(base + 50L); //NOSONAR: expire first lockout
+        Assertions.assertFalse(loginAttemptStore.isLocked(key), "#34: unlocked after base ms");
+
+        // Second lockout — multiplier 0 is clamped to 1, so base*1=base; must not be 0
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: second lockout must be active");
+        long secondRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(secondRemaining > 0L,
+                "#34: lockout duration must be positive (multiplier was clamped from 0 to 1)");
+        Assertions.assertTrue(secondRemaining <= base,
+                "#34: with multiplier=1 the second lockout must still be within base ms (no shrink)");
+
+        // Restore
+        restoreDefaultProps();
+    }
+
+    /**
+     * #34-5 — maxLockoutMillis is floored to the base lockout duration: if the configured max is
+     * LESS than the base, the implementation uses base as the floor. So even max=1 ms must result in
+     * a lockout >= base.
+     */
+    @Test
+    @Order(22)
+    void maxLockoutMillisFlooredToBaseDuration() {
+        // base=500 ms, max configured to 1 ms (ridiculously small) — floor kicks in → effective max = 500 ms
+        final long base = 500L;
+        Properties props = new Properties();
+        props.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        props.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        props.put("water.authentication.login.lockout.duration.millis", String.valueOf(base));
+        props.put("water.authentication.login.lockout.backoff.enabled", "true");
+        props.put("water.authentication.login.lockout.backoff.multiplier", "2");
+        props.put("water.authentication.login.lockout.max.duration.millis", "1"); // below base; floored to base
+        applicationProperties.loadProperties(props);
+
+        String key = TEST_KEY + "-maxFloor-" + System.nanoTime();
+
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: must be locked");
+        long remaining = loginAttemptStore.remainingLockMillis(key);
+        // effective max = base = 500 ms; remaining must be in (0, 500]
+        Assertions.assertTrue(remaining > 0L && remaining <= base,
+                "#34: remaining must be within (0, base=500] ms even when configured max < base (floor); got " + remaining);
+
+        // Restore
+        restoreDefaultProps();
+    }
+
+    /**
+     * #34-6 — recordSuccess resets lockoutCount so the NEXT cycle starts from scratch (base duration),
+     * not from an escalated count accumulated in a previous session.
+     */
+    @Test
+    @Order(23)
+    void recordSuccess_resetsBackoffEscalation() throws InterruptedException {
+        final long base = 200L;
+        Properties props = new Properties();
+        props.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        props.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        props.put("water.authentication.login.lockout.duration.millis", String.valueOf(base));
+        props.put("water.authentication.login.lockout.backoff.enabled", "true");
+        props.put("water.authentication.login.lockout.backoff.multiplier", "2");
+        props.put("water.authentication.login.lockout.max.duration.millis", "10000");
+        applicationProperties.loadProperties(props);
+
+        String key = TEST_KEY + "-backoffReset-" + System.nanoTime();
+
+        // Accumulate two lockouts to escalate the lockoutCount
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Thread.sleep(base + 50L); //NOSONAR: expire first lockout
+
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: second lockout must be active");
+        // Second lockout duration = base*2; expire it
+        Thread.sleep(base * 2 + 100L); //NOSONAR: expire second (escalated) lockout
+
+        Assertions.assertFalse(loginAttemptStore.isLocked(key), "#34: key must be unlocked after second lockout expires");
+
+        // recordSuccess removes the entry → lockoutCount is gone
+        loginAttemptStore.recordSuccess(key);
+        Assertions.assertFalse(loginAttemptStore.isLocked(key), "#34: recordSuccess must unlock");
+        Assertions.assertEquals(0L, loginAttemptStore.remainingLockMillis(key),
+                "#34: remainingLockMillis must be 0 after recordSuccess");
+
+        // Fresh cycle: first lockout must be base again (lockoutCount was reset)
+        for (int i = 0; i < LOW_THRESHOLD; i++) {
+            loginAttemptStore.recordFailure(key);
+        }
+        Assertions.assertTrue(loginAttemptStore.isLocked(key), "#34: first lockout of fresh cycle must be active");
+        long freshRemaining = loginAttemptStore.remainingLockMillis(key);
+        Assertions.assertTrue(freshRemaining > 0L && freshRemaining <= base,
+                "#34: after recordSuccess the fresh lockout must be back to base=" + base + " ms; got " + freshRemaining);
+
+        // Restore
+        restoreDefaultProps();
+    }
+
+    // -----------------------------------------------------------------------
+    // M33-4: lockout continues to work correctly after an eviction cycle.
+    // This is a regression guard: eviction must not corrupt the counter state of surviving entries.
+    // -----------------------------------------------------------------------
+
     @Test
     @Order(17)
     void lockoutStillWorkAfterEviction() throws InterruptedException {
@@ -480,6 +758,28 @@ class InMemoryLoginAttemptStoreTest implements Service {
         restore.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
         restore.put("water.authentication.login.lockout.duration.millis", String.valueOf(SHORT_LOCKOUT_MILLIS));
         restore.put("water.authentication.login.lockout.max.keys", "100000");
+        applicationProperties.loadProperties(restore);
+    }
+
+    // -----------------------------------------------------------------------
+    // helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Restores the properties to the baseline values used across all tests in this class.
+     * Backoff properties are reset to their defaults so each test that overrides them starts
+     * from a clean slate.
+     */
+    private void restoreDefaultProps() {
+        Properties restore = new Properties();
+        restore.put("water.authentication.login.lockout.threshold", String.valueOf(LOW_THRESHOLD));
+        restore.put("water.authentication.login.lockout.window.millis", String.valueOf(SHORT_WINDOW_MILLIS));
+        restore.put("water.authentication.login.lockout.duration.millis", String.valueOf(SHORT_LOCKOUT_MILLIS));
+        restore.put("water.authentication.login.lockout.max.keys", "100000");
+        // Reset backoff to defaults so subsequent tests are unaffected
+        restore.put("water.authentication.login.lockout.backoff.enabled", "true");
+        restore.put("water.authentication.login.lockout.backoff.multiplier", "2");
+        restore.put("water.authentication.login.lockout.max.duration.millis", "3600000");
         applicationProperties.loadProperties(restore);
     }
 }

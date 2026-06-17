@@ -2,6 +2,8 @@ package it.water.authentication.api.options;
 
 import it.water.core.api.service.Service;
 
+import java.util.Set;
+
 /**
  * @Author Aristide Cittadino
  * Define which issuer should be used to retrieve the right AuthenticationProvider.
@@ -9,4 +11,12 @@ import it.water.core.api.service.Service;
  */
 public interface AuthenticationOption extends Service {
     String getIssuerName();
+
+    /**
+     * #34/#37 - Set of trusted reverse-proxy IPs. X-Forwarded-For / X-Real-IP are honored only when the
+     * immediate TCP peer is in this set. Empty (default) means forwarding headers are never trusted and
+     * only the direct TCP source address is used.
+     * @return immutable set of trusted proxy IPs, never null
+     */
+    Set<String> getTrustedProxies();
 }

@@ -7,8 +7,10 @@ dependencies {
 	//lombok
     implementation group: 'org.projectlombok', name: 'lombok', version: project.lombokVersion
     annotationProcessor 'org.projectlombok:lombok:' + project.lombokVersion
-	//Validation 
+	//Validation
 	implementation group:'jakarta.validation', name:'jakarta.validation-api', version: project.jakartaValidationVersion
+	//#34/#37 - Servlet API (jakarta namespace) needed to read the per-request HttpServletRequest for the per-IP login lockout key
+	implementation group: 'jakarta.servlet', name: 'jakarta.servlet-api', version: "6.1.0"
 	//Core Water Deps
 	implementation group: 'it.water.distribution', name: 'Water-distribution-spring', version: project.waterVersion
 	// JPA Repository

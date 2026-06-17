@@ -20,8 +20,10 @@ import com.fasterxml.jackson.annotation.JsonView;
 import it.water.authentication.api.rest.AuthenticationRestApi;
 import it.water.core.api.service.rest.FrameworkRestApi;
 import it.water.core.api.service.rest.WaterJsonView;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -39,4 +41,9 @@ public interface AuthenticationSpringRestApi extends AuthenticationRestApi {
     @JsonView(WaterJsonView.Public.class)
     @Override
     Map<String, String> login(@RequestParam("username") String username, @RequestParam("password") String password);
+
+    @PostMapping(path = "/logout", produces = MediaType.APPLICATION_JSON_VALUE)
+    @JsonView(WaterJsonView.Public.class)
+    @Override
+    Map<String, String> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization);
 }

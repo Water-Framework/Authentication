@@ -26,6 +26,20 @@ public interface AuthenticationSystemApi extends BaseSystemApi {
     Authenticable login(String username, String password, String authProviderFilter);
 
     /**
+     * Login con dimensione IP per il lockout (#34). L'IP NON va nel SecurityContext: è un dato di
+     * trasporto estratto dal controller e passato esplicitamente. Se issuerName è null viene
+     * risolto dall'issuer di default; se clientIp è null/blank il lockout degrada alla sola coppia
+     * issuer:username (nessuna regressione).
+     *
+     * @param username
+     * @param password
+     * @param authProviderFilter issuer/filtro provider (null = issuer di default)
+     * @param clientIp IP del client risolto dal layer di trasporto (può essere null)
+     * @return
+     */
+    Authenticable login(String username, String password, String authProviderFilter, String clientIp);
+
+    /**
      * Generates a valid token for an authenticable
      *
      * @param authenticable

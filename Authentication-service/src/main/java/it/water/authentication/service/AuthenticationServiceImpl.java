@@ -34,6 +34,12 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     }
 
     @Override
+    public Authenticable login(String username, String password, String clientIp) {
+        //#34 - propagate the resolved client IP to the system layer; issuer null lets the system resolve the default issuer
+        return systemService.login(username, password, null, clientIp);
+    }
+
+    @Override
     public String generateToken(Authenticable authenticable) {
         return systemService.generateToken(authenticable);
     }

@@ -21,4 +21,12 @@ public class AuthenticationConstants {
     public static final String LOGIN_LOCKOUT_DURATION_MILLIS = "water.authentication.login.lockout.duration.millis";
     //M33 - hard cap on tracked keys in the in-memory store to bound memory usage
     public static final String LOGIN_LOCKOUT_MAX_KEYS = "water.authentication.login.lockout.max.keys";
+
+    //#34 - progressive backoff
+    public static final String LOGIN_LOCKOUT_BACKOFF_ENABLED = "water.authentication.login.lockout.backoff.enabled";
+    public static final String LOGIN_LOCKOUT_BACKOFF_MULTIPLIER = "water.authentication.login.lockout.backoff.multiplier";
+    public static final String LOGIN_LOCKOUT_MAX_DURATION_MILLIS = "water.authentication.login.lockout.max.duration.millis";
+
+    //#34/#37 - trusted reverse proxies
+    public static final String TRUSTED_PROXIES = "water.authentication.trusted.proxies";
 }

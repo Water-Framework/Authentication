@@ -1,8 +1,13 @@
 
 package it.water.authentication.service.rest.spring;
 
+import it.water.authentication.service.ClientIpResolver;
 import it.water.authentication.service.rest.AuthenticationRestControllerImpl;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Map;
 
@@ -17,5 +22,34 @@ public class AuthenticationSpringRestControllerImpl extends AuthenticationRestCo
     @Override
     public Map<String, String> login(String username, String password) {
         return super.login(username, password);
+    }
+
+    @Override
+    public Map<String, String> logout(String authorization) {
+        return super.logout(authorization);
+    }
+
+    @Override
+    protected String resolveClientIp() {
+        HttpServletRequest request = currentRequest();
+        String tcpSource = null;
+        String forwardedFor = null;
+        String realIp = null;
+        if (request != null) {
+            tcpSource = request.getRemoteAddr();
+            forwardedFor = request.getHeader("X-Forwarded-For");
+            realIp = request.getHeader("X-Real-IP");
+        }
+        return ClientIpResolver.resolve(trustedProxies(), tcpSource, forwardedFor, realIp);
+    }
+
+    //#34/#37 - Spring MVC: the controller is a singleton, so read the per-request jakarta HttpServletRequest
+    //from the thread-bound request context instead of the (javax, unpopulated) @Context field of the base class.
+    private HttpServletRequest currentRequest() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs instanceof ServletRequestAttributes servletAttrs) {
+            return servletAttrs.getRequest();
+        }
+        return null;
     }
 }

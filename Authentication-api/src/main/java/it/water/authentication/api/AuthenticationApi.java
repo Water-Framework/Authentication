@@ -17,6 +17,16 @@ public interface AuthenticationApi extends BaseApi {
     Authenticable login(String username, String password);
 
     /**
+     * Login che propaga il client IP risolto dal controller al system layer per il lockout per-IP (#34).
+     * La firma pubblica a due argomenti resta invariata per retro-compatibilità.
+     * @param username
+     * @param password
+     * @param clientIp IP del client risolto dal layer di trasporto (può essere null)
+     * @return
+     */
+    Authenticable login(String username, String password, String clientIp);
+
+    /**
      * Generates a valid token for an authenticable
      * @param authenticable
      * @return
