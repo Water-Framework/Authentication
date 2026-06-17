@@ -80,6 +80,31 @@ Signed with RSA private key from keystore. Verified with corresponding public ke
 
 `AuthenticationModule` implements `javax.security.auth.spi.LoginModule` for environments using JAAS-based security (e.g., Apache Karaf). Uses the same `AuthenticationProvider` chain.
 
+## Login Lockout & Brute-Force Protection (#34)
+
+Failed logins are throttled by a `LoginAttemptStore` consulted inside `AuthenticationSystemServiceImpl.login(...)`. The protection has three dimensions:
+
+### Per-IP lockout key
+The counter key is **`issuer:ip:username`** (not `issuer:username`). Adding the source-IP dimension prevents a targeted account-lock DoS: an attacker who only knows a victim's username can no longer lock that account from anywhere, because each `(ip, username)` pair is throttled independently. When the IP cannot be resolved the key degrades to `issuer:unknown:username` (no regression vs. the old per-identity lock).
+
+### Client-IP resolution (per-runtime, trusted-proxy aware)
+The IP is a transport detail, so it is extracted **at the REST boundary** and passed explicitly to the system layer — it is **never** stuffed into the `SecurityContext` (which is transport-agnostic and also populated by JAAS / internal calls). Because the two runtimes use different servlet namespaces, extraction is per-runtime:
+
+| Runtime | How the request is read | Class |
+|---|---|---|
+| JAX-RS / CXF | `@Context javax.servlet.http.HttpServletRequest` (field) | `AuthenticationRestControllerImpl.resolveClientIp()` |
+| Spring MVC | `RequestContextHolder` → `jakarta.servlet.http.HttpServletRequest` | `AuthenticationSpringRestControllerImpl.resolveClientIp()` (override) |
+
+The trust decision is centralized in the pure helper `ClientIpResolver`: `X-Forwarded-For` / `X-Real-IP` are honored **only** when the immediate TCP peer (`getRemoteAddr()`) is a configured trusted proxy (`water.authentication.trusted.proxies`, default empty → only the direct TCP source is used). Coordinated with the gateway's #37 trusted-proxy handling.
+
+The IP is threaded through new, additive overloads (public contract unchanged):
+`AuthenticationApi.login(u, p, clientIp)` → `AuthenticationSystemApi.login(u, p, issuer, clientIp)`.
+
+### Progressive backoff
+On reaching the failure threshold the key is locked; with backoff enabled the lock duration grows **exponentially with a cap** across repeated lockouts of the same key (`base × multiplier^n`, capped). A successful login (`recordSuccess`) clears the counter and resets the escalation. The default `InMemoryLoginAttemptStore` is per-JVM (multi-node → plug a shared store, e.g. Redis); it is bounded (stale-eviction + hard key cap) against credential-stuffing memory growth.
+
+**testMode:** when `water.testMode=true` lockout enforcement is fully bypassed (the store is never consulted), so repeated wrong logins in tests don't trip it.
+
 ## Required Configuration
 
 ```properties
@@ -99,6 +124,19 @@ water.authentication.token.expire.millis=86400000
 
 # Refresh token expiry
 water.authentication.refresh.token.expire.millis=604800000
+
+# --- Login lockout / brute-force protection (#34) ---
+# Failed attempts within the window before the (issuer:ip:username) key is locked
+water.authentication.login.lockout.threshold=5
+water.authentication.login.lockout.window.millis=900000      # 15 min sliding window
+water.authentication.login.lockout.duration.millis=900000    # base lock = 15 min
+water.authentication.login.lockout.max.keys=100000           # hard cap on tracked keys (memory bound)
+# Progressive backoff: lock = base * multiplier^(previous lockouts), capped
+water.authentication.login.lockout.backoff.enabled=true
+water.authentication.login.lockout.backoff.multiplier=2
+water.authentication.login.lockout.max.duration.millis=3600000  # cap = 1 h
+# Trusted reverse proxies (CSV); X-Forwarded-For/X-Real-IP honored only from these peers (default empty)
+water.authentication.trusted.proxies=
 ```
 
 ## REST Endpoints
