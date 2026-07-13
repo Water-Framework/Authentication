@@ -9,7 +9,10 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest(classes = AuthenticationApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
-        "water.testMode=true"
+        "water.testMode=true",
+        // User module generates a random admin password when unset (security hardening);
+        // pin it so the admin/admin logins in the shared Karate features succeed.
+        "water.user.admin.default.password=admin"
 })
 public class AuthenticationRestSpringApiTest {
     @LocalServerPort
