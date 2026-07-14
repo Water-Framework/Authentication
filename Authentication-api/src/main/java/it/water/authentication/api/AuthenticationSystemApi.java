@@ -40,6 +40,31 @@ public interface AuthenticationSystemApi extends BaseSystemApi {
     Authenticable login(String username, String password, String authProviderFilter, String clientIp);
 
     /**
+     * Multi-tenant aware login. Additive overload threading the requested active company to the provider.
+     * When the resolved issuer is not in MT mode the companyId is ignored (single-tenant/legacy behavior).
+     *
+     * @param username
+     * @param password
+     * @param authProviderFilter issuer/filtro provider (null = issuer di default)
+     * @param companyId requested active company (may be null)
+     * @param clientIp IP del client risolto dal layer di trasporto (può essere null)
+     * @return
+     */
+    Authenticable login(String username, String password, String authProviderFilter, Long companyId, String clientIp);
+
+    /**
+     * User-level impersonation. Resolves the AuthenticationProvider for the default issuer and delegates
+     * to it; the provider performs the permission gate (caller must hold IMPERSONATE on WaterUser, admin
+     * by construction) and loads the target without a password. No lockout logic here.
+     *
+     * @param targetUsername username of the user to impersonate
+     * @param callerUsername username of the authorized caller (resolved by the Api layer from the context)
+     * @param companyId requested active company for the target (may be null → target's primary)
+     * @return the target Authenticable, marked as impersonated by the caller
+     */
+    Authenticable impersonate(String targetUsername, String callerUsername, Long companyId);
+
+    /**
      * Generates a valid token for an authenticable
      *
      * @param authenticable

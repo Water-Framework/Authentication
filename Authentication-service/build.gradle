@@ -108,6 +108,15 @@ waterDescriptor {
             defaultValue = 'water.authentication.service.issuer'
             description  = 'Default issuer identifier — must match the issuer of an active AuthenticationProvider'
         }
+        property('water.authentication.multitenant.enabled') {
+            name         = 'Multitenancy Enabled'
+            type         = 'boolean'
+            envVar       = 'WATER_AUTHENTICATION_MULTITENANT_ENABLED'
+            required     = false
+            sensitive    = false
+            defaultValue = 'false'
+            description  = 'When true, login embeds the active company as the companyId JWT claim and downstream tenant enforcement applies. Default false = single-tenant (backward compatible).'
+        }
         property('water.authentication.login.lockout.threshold') {
             name         = 'Login Lockout Threshold'
             type         = 'integer'

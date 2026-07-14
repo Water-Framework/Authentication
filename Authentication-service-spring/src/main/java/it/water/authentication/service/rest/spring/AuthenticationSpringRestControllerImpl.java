@@ -20,8 +20,13 @@ import java.util.Map;
 public class AuthenticationSpringRestControllerImpl extends AuthenticationRestControllerImpl implements AuthenticationSpringRestApi {
 
     @Override
-    public Map<String, String> login(String username, String password) {
-        return super.login(username, password);
+    public Map<String, String> login(String username, String password, Long companyId) {
+        return super.login(username, password, companyId);
+    }
+
+    @Override
+    public Map<String, String> impersonate(String targetUsername, Long companyId) {
+        return super.impersonate(targetUsername, companyId);
     }
 
     @Override

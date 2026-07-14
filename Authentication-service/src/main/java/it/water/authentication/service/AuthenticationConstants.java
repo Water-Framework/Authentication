@@ -29,4 +29,8 @@ public class AuthenticationConstants {
 
     //#34/#37 - trusted reverse proxies
     public static final String TRUSTED_PROXIES = "water.authentication.trusted.proxies";
+
+    //Multitenancy - when true this issuer runs in MT mode: login resolves/validates the active company
+    //and the token carries the companyId claim. Default false = single-tenant/legacy behavior.
+    public static final String MULTITENANT_ENABLED = "water.authentication.multitenant.enabled";
 }

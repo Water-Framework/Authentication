@@ -2,10 +2,13 @@ package it.water.authentication.service;
 
 import it.water.authentication.api.AuthenticationApi;
 import it.water.authentication.api.AuthenticationSystemApi;
+import it.water.core.api.bundle.Runtime;
+import it.water.core.api.permission.SecurityContext;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.api.security.Authenticable;
 import it.water.core.interceptors.annotations.FrameworkComponent;
 import it.water.core.interceptors.annotations.Inject;
+import it.water.core.permission.exceptions.UnauthorizedException;
 import it.water.core.service.BaseServiceImpl;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,6 +31,11 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     @Setter
     private ComponentRegistry componentRegistry;
 
+    @Inject
+    @Getter
+    @Setter
+    private Runtime runtime;
+
     @Override
     public Authenticable login(String username, String password) {
         return systemService.login(username, password);
@@ -37,6 +45,25 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     public Authenticable login(String username, String password, String clientIp) {
         //#34 - propagate the resolved client IP to the system layer; issuer null lets the system resolve the default issuer
         return systemService.login(username, password, null, clientIp);
+    }
+
+    @Override
+    public Authenticable login(String username, String password, Long companyId, String clientIp) {
+        //Multitenancy - thread the requested active company down; issuer null lets the system resolve the default
+        return systemService.login(username, password, null, companyId, clientIp);
+    }
+
+    @Override
+    public Authenticable impersonate(String targetUsername, Long companyId) {
+        //authenticated endpoint: the caller must be logged in; resolve the caller from the current context
+        SecurityContext securityContext = (runtime != null) ? runtime.getSecurityContext() : null;
+        if (securityContext == null || !securityContext.isLoggedIn())
+            throw new UnauthorizedException();
+        String callerUsername = securityContext.getLoggedUsername();
+        if (callerUsername == null || callerUsername.isBlank())
+            throw new UnauthorizedException();
+        //the actual permission gate + target load live in the provider (User-service)
+        return systemService.impersonate(targetUsername, callerUsername, companyId);
     }
 
     @Override

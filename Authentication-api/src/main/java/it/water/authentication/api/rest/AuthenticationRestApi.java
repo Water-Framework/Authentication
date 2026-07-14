@@ -33,7 +33,18 @@ public interface AuthenticationRestApi extends RestApi {
     @ApiResponses(value = {@ApiResponse(code = 401, message = "login failed"),
             @ApiResponse(code = 200, message = "login successed")})
     @JsonView(WaterJsonView.Public.class)
-    Map<String,String> login(@FormParam("username") String username, @FormParam("password") String password);
+    Map<String,String> login(@FormParam("username") String username, @FormParam("password") String password, @FormParam("companyId") Long companyId);
+
+    @POST
+    @Path("/impersonate")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @LoggedIn
+    @ApiOperation(value = "/authentication/impersonate", response = String.class, notes = "Mints a JWT impersonating the target user (requires a valid caller JWT and the IMPERSONATE permission)", httpMethod = "POST", produces = "application/json", consumes = "application/x-www-form-urlencoded")
+    @ApiResponses(value = {@ApiResponse(code = 401, message = "not authenticated or not authorized to impersonate"),
+            @ApiResponse(code = 200, message = "impersonation token issued")})
+    @JsonView(WaterJsonView.Public.class)
+    Map<String,String> impersonate(@FormParam("targetUsername") String targetUsername, @FormParam("companyId") Long companyId);
 
     @POST
     @Path("/logout")

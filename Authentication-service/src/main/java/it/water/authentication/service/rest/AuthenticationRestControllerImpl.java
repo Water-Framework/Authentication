@@ -44,12 +44,25 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
     private static final String BEARER_PREFIX = "Bearer ";
 
     @Override
-    public Map<String, String> login(String username, String password) {
+    public Map<String, String> login(String username, String password, Long companyId) {
         log.debug("User {} is logging in ...", username);
         Map<String, String> response = new HashMap<>();
-        Authenticable authenticable = authenticationApi.login(username, password, resolveClientIp());
+        //Multitenancy - companyId is an optional form param (null when absent → single-tenant/legacy)
+        Authenticable authenticable = authenticationApi.login(username, password, companyId, resolveClientIp());
         log.debug("User has logged in succesfully at: {} - {}", username, Instant.now());
         String token = authenticationApi.generateToken(authenticable);
+        response.put("token", token);
+        return response;
+    }
+
+    @Override
+    public Map<String, String> impersonate(String targetUsername, Long companyId) {
+        //@LoggedIn has already validated the caller's bearer token; the caller is resolved from the context
+        //inside the Api layer, and the IMPERSONATE permission gate is enforced in the provider.
+        Authenticable authenticable = authenticationApi.impersonate(targetUsername, companyId);
+        String token = authenticationApi.generateToken(authenticable);
+        log.debug("Impersonation token issued for target {} at: {}", targetUsername, Instant.now());
+        Map<String, String> response = new HashMap<>();
         response.put("token", token);
         return response;
     }

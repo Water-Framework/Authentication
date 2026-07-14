@@ -19,4 +19,12 @@ public interface AuthenticationOption extends Service {
      * @return immutable set of trusted proxy IPs, never null
      */
     Set<String> getTrustedProxies();
+
+    /**
+     * Multitenancy enablement for this issuer. When true, login resolves/validates the active company
+     * and the emitted token carries the companyId claim; when false the behavior is single-tenant/legacy
+     * (any companyId supplied by the client is ignored). Reads water.authentication.multitenant.enabled.
+     * @return true if multi-tenant mode is enabled (default false)
+     */
+    boolean isMultiTenantEnabled();
 }

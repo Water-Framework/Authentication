@@ -40,7 +40,12 @@ public interface AuthenticationSpringRestApi extends AuthenticationRestApi {
     @PostMapping(path = "/login", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @JsonView(WaterJsonView.Public.class)
     @Override
-    Map<String, String> login(@RequestParam("username") String username, @RequestParam("password") String password);
+    Map<String, String> login(@RequestParam("username") String username, @RequestParam("password") String password, @RequestParam(value = "companyId", required = false) Long companyId);
+
+    @PostMapping(path = "/impersonate", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @JsonView(WaterJsonView.Public.class)
+    @Override
+    Map<String, String> impersonate(@RequestParam("targetUsername") String targetUsername, @RequestParam(value = "companyId", required = false) Long companyId);
 
     @PostMapping(path = "/logout", produces = MediaType.APPLICATION_JSON_VALUE)
     @JsonView(WaterJsonView.Public.class)

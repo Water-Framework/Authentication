@@ -315,3 +315,14 @@ class CustomAuthenticationTest {
 ```
 
 The Authentication module provides a robust, extensible authentication system that can be customized for various use cases while maintaining security and performance standards.
+
+## Multitenancy (Company-based)
+
+Company-based multitenancy support (enabled issuer-side via `water.authentication.multitenant.enabled`, default `false` → single-tenant, fully backward compatible).
+
+- **Login gate**: additive overload `AuthenticationProvider.login(username, password, Long companyId)`; membership validation lives in `UserAuthenticationProvider` (User module). A normal user's requested `companyId` must be in its membership (else `401`), otherwise the primary company is used; an **admin is non-scoped** (cross-tenant, for provisioning).
+- The resolved company is emitted as the encrypted JWT claim `companyId` only when non-null (legacy tokens stay byte-identical).
+- **User-level impersonation**: `AuthenticationApi.impersonate(targetUsername, companyId)` + endpoint `POST /water/authentication/impersonate` (authenticated), permission-gated via `UserActions.IMPERSONATE` (admin by construction). The token carries the target's identity plus the claim `impersonatedBy=<caller>` (audit).
+- REST login accepts an optional `companyId` form param.
+
+Deferred: company-aware role assignment/resolution and granular per-entity opt-out (see `multitenancy-analysis-proposal.md`).

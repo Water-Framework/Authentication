@@ -119,6 +119,10 @@ water.private.key.password=changeit
 # Default issuer
 water.authentication.service.issuer=water
 
+# Multitenancy enablement (issuer-side). true => login embeds the active company as the
+# `companyId` JWT claim + downstream tenant enforcement applies. Default false = single-tenant.
+water.authentication.multitenant.enabled=false
+
 # Token expiry (seconds)
 water.authentication.token.expire.millis=86400000
 
@@ -139,16 +143,25 @@ water.authentication.login.lockout.max.duration.millis=3600000  # cap = 1 h
 water.authentication.trusted.proxies=
 ```
 
+## Multitenancy — Company-based (see `source/multitenancy-analysis-proposal.md`)
+
+Enabled issuer-side via `water.authentication.multitenant.enabled` (default false → single-tenant, fully backward compatible: no `companyId` claim, no tenant filtering).
+
+- **Login gate (in the provider, NOT here)**: additive overload `AuthenticationProvider.login(username, password, Long companyId)` (default delegates to the 2-arg). `AuthenticationSystemServiceImpl.login` calls the 3-arg only when MT is enabled; the membership validation lives in `UserAuthenticationProvider` (User domain): a normal user's requested `companyId` must be in its `UserCompany` membership (else `UnauthorizedException`), else the primary; an **admin is non-scoped** (returns `null` → cross-tenant, for provisioning). The resolved company is set on the returned `Authenticable` and emitted as the encrypted JWT claim `companyId` (`NimbusJwtTokenService.generateClaims`, only when non-null).
+- **Impersonation (user-level)**: `AuthenticationApi.impersonate(targetUsername, companyId)` + endpoint `POST /water/authentication/impersonate` (authenticated). Permission-gated via `UserActions.IMPERSONATE` on `WaterUser` (admin by construction; a normal user only if granted). Mints a token with the TARGET's identity/company/roles + claim `impersonatedBy=<caller>` marking it non-genuine (audit). Not MT-flag-gated; same TTL.
+- REST login accepts an optional `@FormParam companyId` (JAX-RS) / `@RequestParam companyId` (Spring); absent → null.
+
 ## REST Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/water/authentication/login` | Login, returns JWT |
+| `POST` | `/water/authentication/login` | Login, returns JWT (optional `companyId` for MT) |
 | `POST` | `/water/authentication/refresh` | Refresh JWT |
 | `GET` | `/water/authentication/options` | List available issuers |
 | `POST` | `/water/authentication/logout` | Invalidate token |
+| `POST` | `/water/authentication/impersonate` | (MT) Mint a token impersonating a target user; requires `IMPERSONATE` permission |
 
-**Security:** Login and options endpoints are public (no JWT required). Logout requires a valid JWT.
+**Security:** Login and options endpoints are public (no JWT required). Logout and impersonate require a valid JWT.
 
 ## Adding a Custom AuthenticationProvider
 

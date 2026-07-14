@@ -45,4 +45,12 @@ public class AuthenticationOptionImpl implements AuthenticationOption {
         }
         return Collections.unmodifiableSet(proxies);
     }
+
+    @Override
+    public boolean isMultiTenantEnabled() {
+        if (applicationProperties == null)
+            return false;
+        Object raw = applicationProperties.getProperty(AuthenticationConstants.MULTITENANT_ENABLED);
+        return raw != null && Boolean.parseBoolean(raw.toString().trim());
+    }
 }

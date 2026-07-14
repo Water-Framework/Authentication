@@ -81,6 +81,12 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
 
     @Override
     public Authenticable login(String username, String password, String authProviderFilter, String clientIp) {
+        //Multitenancy - thin delegation; no company requested (single-tenant/legacy path)
+        return login(username, password, authProviderFilter, null, clientIp);
+    }
+
+    @Override
+    public Authenticable login(String username, String password, String authProviderFilter, Long companyId, String clientIp) {
         //#34 - resolve the issuer (null filter falls back to the default) and build an IP-scoped lockout key
         String issuerName = (authProviderFilter != null) ? authProviderFilter : authenticationOption.getIssuerName();
         String ipPart = (clientIp == null || clientIp.isBlank()) ? "unknown" : clientIp.trim();
@@ -101,7 +107,11 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
 
         Authenticable authenticable;
         try {
-            authenticable = authenticationProviderOpt.get().login(username, password);
+            //Multitenancy - only the MT-enabled issuer threads companyId to the provider (which resolves/validates
+            //the active company). Otherwise the legacy 2-arg path runs and any client-supplied companyId is ignored.
+            authenticable = authenticationOption.isMultiTenantEnabled()
+                    ? authenticationProviderOpt.get().login(username, password, companyId)
+                    : authenticationProviderOpt.get().login(username, password);
         } catch (RuntimeException loginError) {
             if (lockoutEnabled)
                 loginAttemptStore.recordFailure(attemptKey);
@@ -127,6 +137,18 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
         Object raw = applicationProperties.getProperty(AuthenticationConstants.TEST_MODE);
         boolean testMode = raw != null && Boolean.parseBoolean(raw.toString().trim());
         return !testMode;
+    }
+
+    @Override
+    public Authenticable impersonate(String targetUsername, String callerUsername, Long companyId) {
+        //resolve the provider for the default issuer (same lookup pattern as login); no lockout here
+        String issuerName = authenticationOption.getIssuerName();
+        Collection<AuthenticationProvider> authenticationProviders = componentRegistry.findComponents(AuthenticationProvider.class, null);
+        Optional<AuthenticationProvider> authenticationProviderOpt = authenticationProviders.stream().filter(authenticationProvider -> authenticationProvider.issuersNames().contains(issuerName)).findFirst();
+        if (authenticationProviderOpt.isEmpty())
+            throw new UnauthorizedException("No authentication provider found for " + issuerName);
+        //the provider performs the permission gate + target load; Authentication only passes the usernames
+        return authenticationProviderOpt.get().impersonate(targetUsername, callerUsername, companyId);
     }
 
     @Override
