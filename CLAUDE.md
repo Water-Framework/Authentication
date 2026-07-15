@@ -143,7 +143,7 @@ water.authentication.login.lockout.max.duration.millis=3600000  # cap = 1 h
 water.authentication.trusted.proxies=
 ```
 
-## Multitenancy — Company-based (see `source/multitenancy-analysis-proposal.md`)
+## Multitenancy — Company-based (see the `multitenancy-knowledge` skill)
 
 Enabled issuer-side via `water.authentication.multitenant.enabled` (default false → single-tenant, fully backward compatible: no `companyId` claim, no tenant filtering).
 

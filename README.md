@@ -325,4 +325,4 @@ Company-based multitenancy support (enabled issuer-side via `water.authenticatio
 - **User-level impersonation**: `AuthenticationApi.impersonate(targetUsername, companyId)` + endpoint `POST /water/authentication/impersonate` (authenticated), permission-gated via `UserActions.IMPERSONATE` (admin by construction). The token carries the target's identity plus the claim `impersonatedBy=<caller>` (audit).
 - REST login accepts an optional `companyId` form param.
 
-Deferred: company-aware role assignment/resolution and granular per-entity opt-out (see `multitenancy-analysis-proposal.md`).
+Deferred: company-aware role assignment/resolution and granular per-entity opt-out (see the `multitenancy-knowledge` skill).
