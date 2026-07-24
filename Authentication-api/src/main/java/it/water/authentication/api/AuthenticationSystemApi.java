@@ -53,6 +53,12 @@ public interface AuthenticationSystemApi extends BaseSystemApi {
     Authenticable login(String username, String password, String authProviderFilter, Long companyId, String clientIp);
 
     /**
+     * Resolves the active company through the location-transparent Company integration client.
+     */
+    Authenticable loginForVirtualHost(String username, String password, String authProviderFilter,
+                                      String virtualHost, String clientIp);
+
+    /**
      * User-level impersonation. Resolves the AuthenticationProvider for the default issuer and delegates
      * to it; the provider performs the permission gate (caller must hold IMPERSONATE on WaterUser, admin
      * by construction) and loads the target without a password. No lockout logic here.

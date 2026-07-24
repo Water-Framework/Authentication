@@ -38,6 +38,11 @@ public interface AuthenticationApi extends BaseApi {
     Authenticable login(String username, String password, Long companyId, String clientIp);
 
     /**
+     * Resolves the active company from the request virtual host before authenticating.
+     */
+    Authenticable loginForVirtualHost(String username, String password, String virtualHost, String clientIp);
+
+    /**
      * User-level impersonation. The caller (taken from the current SecurityContext) mints an
      * Authenticable that carries the identity of the target user. Permission-gated in the provider
      * (caller must hold IMPERSONATE on WaterUser; admin by construction), NOT gated by the MT flag.

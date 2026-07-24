@@ -33,7 +33,8 @@ public interface AuthenticationRestApi extends RestApi {
     @ApiResponses(value = {@ApiResponse(code = 401, message = "login failed"),
             @ApiResponse(code = 200, message = "login successed")})
     @JsonView(WaterJsonView.Public.class)
-    Map<String,String> login(@FormParam("username") String username, @FormParam("password") String password, @FormParam("companyId") Long companyId);
+    Map<String,String> login(@FormParam("username") String username, @FormParam("password") String password,
+                             @FormParam("companyId") Long companyId);
 
     @POST
     @Path("/impersonate")
