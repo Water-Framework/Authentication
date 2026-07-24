@@ -47,8 +47,10 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
     public Map<String, String> login(String username, String password, Long companyId) {
         log.debug("User {} is logging in ...", username);
         Map<String, String> response = new HashMap<>();
-        //Multitenancy - companyId is an optional form param (null when absent → single-tenant/legacy)
-        Authenticable authenticable = authenticationApi.login(username, password, companyId, resolveClientIp());
+        Authenticable authenticable = companyId != null
+                ? authenticationApi.login(username, password, companyId, resolveClientIp())
+                : authenticationApi.loginForVirtualHost(
+                username, password, resolveVirtualHost(), resolveClientIp());
         log.debug("User has logged in succesfully at: {} - {}", username, Instant.now());
         String token = authenticationApi.generateToken(authenticable);
         response.put("token", token);
@@ -99,6 +101,18 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
             log.trace("Unable to resolve client IP from JAX-RS request: {}", e.getMessage());
         }
         return ClientIpResolver.resolve(trustedProxies(), tcpSource, forwardedFor, realIp);
+    }
+
+    /**
+     * Resolves the tenant routing key from the HTTP request without trusting a client-supplied company id.
+     */
+    protected String resolveVirtualHost() {
+        try {
+            return httpServletRequest == null ? null : httpServletRequest.getServerName();
+        } catch (Exception e) {
+            log.trace("Unable to resolve virtual host from JAX-RS request: {}", e.getMessage());
+            return null;
+        }
     }
 
     //#34/#37 - exposed so runtime subclasses (e.g. Spring) can apply the same trust policy with their own request type

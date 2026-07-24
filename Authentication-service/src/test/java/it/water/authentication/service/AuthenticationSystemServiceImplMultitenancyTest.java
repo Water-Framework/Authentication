@@ -22,6 +22,7 @@ import it.water.core.api.bundle.ApplicationProperties;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.api.security.Authenticable;
 import it.water.core.api.security.AuthenticationProvider;
+import it.water.core.api.service.integration.CompanyIntegrationClient;
 import it.water.core.permission.exceptions.UnauthorizedException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +78,9 @@ class AuthenticationSystemServiceImplMultitenancyTest {
     @Mock
     private Authenticable authenticable;
 
+    @Mock
+    private CompanyIntegrationClient companyIntegrationClient;
+
     private AuthenticationSystemServiceImpl service;
 
     @BeforeEach
@@ -127,6 +131,54 @@ class AuthenticationSystemServiceImplMultitenancyTest {
         Authenticable result = service.login("user1", "pwd1", TEST_ISSUER, null, null);
 
         Assertions.assertSame(authenticable, result);
+        verify(provider).login("user1", "pwd1", null);
+    }
+
+    @Test
+    void loginForVirtualHost_resolvesCompanyBeforeAuthenticating() {
+        when(authenticationOption.isMultiTenantEnabled()).thenReturn(true);
+        when(componentRegistry.findComponent(CompanyIntegrationClient.class, null))
+                .thenReturn(companyIntegrationClient);
+        when(companyIntegrationClient.findCompanyIdByVirtualHost("tenant.example.test")).thenReturn(77L);
+        when(provider.login("user1", "pwd1", 77L)).thenReturn(authenticable);
+
+        Authenticable result = service.loginForVirtualHost(
+                "user1", "pwd1", TEST_ISSUER, "tenant.example.test", "127.0.0.1");
+
+        Assertions.assertSame(authenticable, result);
+        verify(companyIntegrationClient).findCompanyIdByVirtualHost("tenant.example.test");
+        verify(provider).login("user1", "pwd1", 77L);
+    }
+
+    @Test
+    void loginForVirtualHost_allowsNonScopedAdminWhenNoTenantExistsYet() {
+        when(authenticationOption.isMultiTenantEnabled()).thenReturn(true);
+        when(componentRegistry.findComponent(CompanyIntegrationClient.class, null))
+                .thenReturn(companyIntegrationClient);
+        when(companyIntegrationClient.findCompanyIdByVirtualHost("unknown.example.test")).thenReturn(null);
+        when(provider.login("admin", "pwd", null)).thenReturn(authenticable);
+        when(authenticable.isAdmin()).thenReturn(true);
+
+        Authenticable result = service.loginForVirtualHost(
+                "admin", "pwd", TEST_ISSUER, "unknown.example.test", "127.0.0.1");
+
+        Assertions.assertSame(authenticable, result);
+        verify(provider).login("admin", "pwd", null);
+    }
+
+    @Test
+    void loginForVirtualHost_rejectsTenantUserWhenHostIsUnknown() {
+        when(authenticationOption.isMultiTenantEnabled()).thenReturn(true);
+        when(componentRegistry.findComponent(CompanyIntegrationClient.class, null))
+                .thenReturn(companyIntegrationClient);
+        when(companyIntegrationClient.findCompanyIdByVirtualHost("unknown.example.test")).thenReturn(null);
+        when(provider.login("user1", "pwd1", null)).thenReturn(authenticable);
+        when(authenticable.isAdmin()).thenReturn(false);
+
+        Assertions.assertThrows(UnauthorizedException.class, () ->
+                service.loginForVirtualHost(
+                        "user1", "pwd1", TEST_ISSUER, "unknown.example.test", "127.0.0.1"));
+
         verify(provider).login("user1", "pwd1", null);
     }
 

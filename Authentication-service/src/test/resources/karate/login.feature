@@ -29,3 +29,15 @@
       When method POST
       Then status 401
 
+    Scenario: User can explicitly select a company during login
+
+      Given header Content-Type = 'application/x-www-form-urlencoded'
+      And header Accept = 'application/json'
+      Given url serviceBaseUrl+'/water/authentication/login'
+      And request 'username=admin&password=admin&companyId=42'
+      When method POST
+      Then status 200
+      And match response ==
+        """
+        { "token": #string }
+        """

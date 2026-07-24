@@ -9,6 +9,7 @@ import it.water.core.api.interceptors.OnActivate;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.api.security.Authenticable;
 import it.water.core.api.security.AuthenticationProvider;
+import it.water.core.api.service.integration.CompanyIntegrationClient;
 import it.water.core.interceptors.annotations.FrameworkComponent;
 import it.water.core.interceptors.annotations.Inject;
 import it.water.core.permission.exceptions.UnauthorizedException;
@@ -128,6 +129,29 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
         if (lockoutEnabled)
             loginAttemptStore.recordSuccess(attemptKey);
         return authenticable;
+    }
+
+    @Override
+    public Authenticable loginForVirtualHost(String username, String password, String authProviderFilter,
+                                             String virtualHost, String clientIp) {
+        if (!authenticationOption.isMultiTenantEnabled()) {
+            return login(username, password, authProviderFilter, null, clientIp);
+        }
+
+        CompanyIntegrationClient companyIntegrationClient =
+                componentRegistry.findComponent(CompanyIntegrationClient.class, null);
+        Long companyId = companyIntegrationClient.findCompanyIdByVirtualHost(virtualHost);
+        if (companyId != null) {
+            return login(username, password, authProviderFilter, companyId, clientIp);
+        }
+
+        // A fresh installation has no Company/virtualHost yet. Only the non-scoped Water admin may
+        // authenticate in that state so it can provision the first tenant.
+        Authenticable authenticable = login(username, password, authProviderFilter, null, clientIp);
+        if (authenticable.isAdmin()) {
+            return authenticable;
+        }
+        throw new UnauthorizedException("Invalid credentials");
     }
 
     //Lockout is disabled under water.testMode so repeated wrong logins in tests don't trip it

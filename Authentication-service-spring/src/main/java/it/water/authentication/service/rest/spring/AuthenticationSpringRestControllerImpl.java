@@ -48,6 +48,12 @@ public class AuthenticationSpringRestControllerImpl extends AuthenticationRestCo
         return ClientIpResolver.resolve(trustedProxies(), tcpSource, forwardedFor, realIp);
     }
 
+    @Override
+    protected String resolveVirtualHost() {
+        HttpServletRequest request = currentRequest();
+        return request == null ? null : request.getServerName();
+    }
+
     //#34/#37 - Spring MVC: the controller is a singleton, so read the per-request jakarta HttpServletRequest
     //from the thread-bound request context instead of the (javax, unpopulated) @Context field of the base class.
     private HttpServletRequest currentRequest() {

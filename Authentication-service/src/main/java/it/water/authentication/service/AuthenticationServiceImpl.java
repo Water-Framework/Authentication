@@ -54,6 +54,11 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     }
 
     @Override
+    public Authenticable loginForVirtualHost(String username, String password, String virtualHost, String clientIp) {
+        return systemService.loginForVirtualHost(username, password, null, virtualHost, clientIp);
+    }
+
+    @Override
     public Authenticable impersonate(String targetUsername, Long companyId) {
         //authenticated endpoint: the caller must be logged in; resolve the caller from the current context
         SecurityContext securityContext = (runtime != null) ? runtime.getSecurityContext() : null;
