@@ -61,15 +61,20 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     @Override
     public Authenticable impersonate(String targetUsername, Long companyId) {
         //authenticated endpoint: the caller must be logged in; resolve the caller from the current context
-        SecurityContext securityContext = (runtime != null) ? runtime.getSecurityContext() : null;
-        if (securityContext == null || !securityContext.isLoggedIn())
-            throw new UnauthorizedException();
-        String callerUsername = securityContext.getLoggedUsername();
-        if (callerUsername == null || callerUsername.isBlank())
-            throw new UnauthorizedException();
+        String callerUsername = requireLoggedInUsername();
         //the actual permission gate + target load live in the provider (User-service)
         return systemService.impersonate(targetUsername, callerUsername, companyId);
     }
+
+    @Override
+    public Authenticable assumeCompany(Long companyId) {
+        //the caller must be logged in; resolve the caller from the current context
+        String callerUsername = requireLoggedInUsername();
+        //the admin-only gate lives in the provider (User-service)
+        return systemService.assumeCompany(callerUsername, companyId);
+    }
+
+
 
     @Override
     public String generateToken(Authenticable authenticable) {
@@ -79,5 +84,20 @@ public class AuthenticationServiceImpl extends BaseServiceImpl implements Authen
     @Override
     public void logout(String token) {
         systemService.logout(token);
+    }
+
+
+    /**
+     * Resolves the username of the currently logged-in caller from the SecurityContext, or throws
+     * UnauthorizedException if there is no active/valid login.
+     */
+    private String requireLoggedInUsername() {
+        SecurityContext securityContext = (runtime != null) ? runtime.getSecurityContext() : null;
+        if (securityContext == null || !securityContext.isLoggedIn())
+            throw new UnauthorizedException();
+        String callerUsername = securityContext.getLoggedUsername();
+        if (callerUsername == null || callerUsername.isBlank())
+            throw new UnauthorizedException();
+        return callerUsername;
     }
 }

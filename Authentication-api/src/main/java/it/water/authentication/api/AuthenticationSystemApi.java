@@ -71,6 +71,18 @@ public interface AuthenticationSystemApi extends BaseSystemApi {
     Authenticable impersonate(String targetUsername, String callerUsername, Long companyId);
 
     /**
+     * Lets an already-authenticated admin scope their OWN session into a specific company, without
+     * impersonating a member user of it. Resolves the AuthenticationProvider for the default issuer
+     * and delegates to it; the provider performs the admin-only gate and resolves the caller's roles.
+     * No lockout logic here (not a credential-verification path).
+     *
+     * @param callerUsername username of the authorized caller (resolved by the Api layer from the context)
+     * @param companyId      the company the caller wants to scope into
+     * @return the caller's own Authenticable with its active company set to companyId
+     */
+    Authenticable assumeCompany(String callerUsername, Long companyId);
+
+    /**
      * Generates a valid token for an authenticable
      *
      * @param authenticable

@@ -25,14 +25,20 @@ public class AuthenticationSpringRestControllerImpl extends AuthenticationRestCo
     }
 
     @Override
-    public Map<String, String> impersonate(String targetUsername, Long companyId) {
-        return super.impersonate(targetUsername, companyId);
+    public Map<String, String> assumeCompany(Long companyId) {
+        return super.assumeCompany(companyId);
     }
 
     @Override
     public Map<String, String> logout(String authorization) {
         return super.logout(authorization);
     }
+
+    @Override
+    public Map<String, String> impersonate(String targetUsername, Long companyId) {
+        return super.impersonate(targetUsername, companyId);
+    }
+
 
     @Override
     protected String resolveClientIp() {

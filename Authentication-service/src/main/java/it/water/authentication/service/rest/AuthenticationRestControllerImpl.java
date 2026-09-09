@@ -46,15 +46,12 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
     @Override
     public Map<String, String> login(String username, String password, Long companyId) {
         log.debug("User {} is logging in ...", username);
-        Map<String, String> response = new HashMap<>();
         Authenticable authenticable = companyId != null
                 ? authenticationApi.login(username, password, companyId, resolveClientIp())
                 : authenticationApi.loginForVirtualHost(
                 username, password, resolveVirtualHost(), resolveClientIp());
         log.debug("User has logged in succesfully at: {} - {}", username, Instant.now());
-        String token = authenticationApi.generateToken(authenticable);
-        response.put("token", token);
-        return response;
+        return mintTokenResponse(authenticable);
     }
 
     @Override
@@ -62,11 +59,8 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
         //@LoggedIn has already validated the caller's bearer token; the caller is resolved from the context
         //inside the Api layer, and the IMPERSONATE permission gate is enforced in the provider.
         Authenticable authenticable = authenticationApi.impersonate(targetUsername, companyId);
-        String token = authenticationApi.generateToken(authenticable);
         log.debug("Impersonation token issued for target {} at: {}", targetUsername, Instant.now());
-        Map<String, String> response = new HashMap<>();
-        response.put("token", token);
-        return response;
+        return mintTokenResponse(authenticable);
     }
 
     @Override
@@ -77,6 +71,26 @@ public class AuthenticationRestControllerImpl implements AuthenticationRestApi {
         log.debug("Token revoked (logout) at: {}", Instant.now());
         Map<String, String> response = new HashMap<>();
         response.put("result", "ok");
+        return response;
+    }
+
+    @Override
+    public Map<String, String> assumeCompany(Long companyId) {
+        //@LoggedIn has already validated the caller's bearer token; the caller is resolved from the context
+        //inside the Api layer, and the admin-only gate is enforced in the provider.
+        Authenticable authenticable = authenticationApi.assumeCompany(companyId);
+        log.debug("Company {} assumed at: {}", companyId, Instant.now());
+        return mintTokenResponse(authenticable);
+    }
+
+    /**
+     * Mints a JWT for the given authenticable and wraps it in the standard REST response shape.
+     * Shared by every endpoint that ends in "issue a token" (login, impersonate, assumeCompany).
+     */
+    private Map<String, String> mintTokenResponse(Authenticable authenticable) {
+        String token = authenticationApi.generateToken(authenticable);
+        Map<String, String> response = new HashMap<>();
+        response.put("token", token);
         return response;
     }
 
