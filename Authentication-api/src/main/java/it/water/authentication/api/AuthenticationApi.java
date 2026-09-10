@@ -53,6 +53,16 @@ public interface AuthenticationApi extends BaseApi {
     Authenticable impersonate(String targetUsername, Long companyId);
 
     /**
+     * Lets an already-authenticated admin scope their OWN session into a specific company, without
+     * impersonating a member user of it. The caller (taken from the current SecurityContext) mints an
+     * Authenticable for its OWN identity, with the active company set to companyId. Permission-gated
+     * in the provider (admin-only, no membership check), NOT gated by the MT flag.
+     * @param companyId the company the caller wants to scope into (may be null to leave scope)
+     * @return the caller's own Authenticable with its active company set to companyId
+     */
+    Authenticable assumeCompany(Long companyId);
+
+    /**
      * Generates a valid token for an authenticable
      * @param authenticable
      * @return

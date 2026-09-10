@@ -19,7 +19,6 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collection;
-import java.util.Optional;
 
 
 /**
@@ -100,19 +99,15 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
             throw new AccountLockedException(remaining);
         }
 
-        Collection<AuthenticationProvider> authenticationProviders = componentRegistry.findComponents(AuthenticationProvider.class, null);
-        //finds the one with highest priority for the specific issuer
-        Optional<AuthenticationProvider> authenticationProviderOpt = authenticationProviders.stream().filter(authenticationProvider -> authenticationProvider.issuersNames().contains(issuerName)).findFirst();
-        if (authenticationProviderOpt.isEmpty())
-            throw new UnauthorizedException("No authentication provider found for " + issuerName);
+        AuthenticationProvider authenticationProvider = resolveProviderForIssuer(issuerName);
 
         Authenticable authenticable;
         try {
             //Multitenancy - only the MT-enabled issuer threads companyId to the provider (which resolves/validates
             //the active company). Otherwise the legacy 2-arg path runs and any client-supplied companyId is ignored.
             authenticable = authenticationOption.isMultiTenantEnabled()
-                    ? authenticationProviderOpt.get().login(username, password, companyId)
-                    : authenticationProviderOpt.get().login(username, password);
+                    ? authenticationProvider.login(username, password, companyId)
+                    : authenticationProvider.login(username, password);
         } catch (RuntimeException loginError) {
             if (lockoutEnabled)
                 loginAttemptStore.recordFailure(attemptKey);
@@ -165,14 +160,30 @@ public class AuthenticationSystemServiceImpl extends BaseSystemServiceImpl imple
 
     @Override
     public Authenticable impersonate(String targetUsername, String callerUsername, Long companyId) {
-        //resolve the provider for the default issuer (same lookup pattern as login); no lockout here
-        String issuerName = authenticationOption.getIssuerName();
-        Collection<AuthenticationProvider> authenticationProviders = componentRegistry.findComponents(AuthenticationProvider.class, null);
-        Optional<AuthenticationProvider> authenticationProviderOpt = authenticationProviders.stream().filter(authenticationProvider -> authenticationProvider.issuersNames().contains(issuerName)).findFirst();
-        if (authenticationProviderOpt.isEmpty())
-            throw new UnauthorizedException("No authentication provider found for " + issuerName);
+        //resolve the provider for the default issuer
+        AuthenticationProvider authenticationProvider = resolveProviderForIssuer(authenticationOption.getIssuerName());
         //the provider performs the permission gate + target load; Authentication only passes the usernames
-        return authenticationProviderOpt.get().impersonate(targetUsername, callerUsername, companyId);
+        return authenticationProvider.impersonate(targetUsername, callerUsername, companyId);
+    }
+
+    @Override
+    public Authenticable assumeCompany(String callerUsername, Long companyId) {
+        //resolve the provider for the default issuer
+        AuthenticationProvider authenticationProvider = resolveProviderForIssuer(authenticationOption.getIssuerName());
+        //the provider performs the admin-only gate;
+        return authenticationProvider.assumeCompany(callerUsername, companyId);
+    }
+
+    /**
+     * Resolves the AuthenticationProvider registered for the given issuer (the one with highest
+     * priority whose issuersNames() contains it), or throws UnauthorizedException if none is found.
+     */
+    private AuthenticationProvider resolveProviderForIssuer(String issuerName) {
+        Collection<AuthenticationProvider> authenticationProviders = componentRegistry.findComponents(AuthenticationProvider.class, null);
+        return authenticationProviders.stream()
+                .filter(authenticationProvider -> authenticationProvider.issuersNames().contains(issuerName))
+                .findFirst()
+                .orElseThrow(() -> new UnauthorizedException("No authentication provider found for " + issuerName));
     }
 
     @Override

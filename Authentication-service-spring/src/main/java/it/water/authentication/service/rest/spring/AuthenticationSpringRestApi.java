@@ -53,4 +53,13 @@ public interface AuthenticationSpringRestApi extends AuthenticationRestApi {
     @JsonView(WaterJsonView.Public.class)
     @Override
     Map<String, String> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization);
+
+
+    @PostMapping(
+            path ="/assume-company",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @JsonView(WaterJsonView.Public.class)
+    @Override
+    Map<String, String> assumeCompany(@RequestParam("companyId") Long companyId);
 }

@@ -56,4 +56,19 @@ public interface AuthenticationRestApi extends RestApi {
             @ApiResponse(code = 200, message = "logout successed")})
     @JsonView(WaterJsonView.Public.class)
     Map<String,String> logout(@HeaderParam(HttpHeaders.AUTHORIZATION) String authorization);
+
+    @POST
+    @Path("/assume-company")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @LoggedIn
+    @ApiOperation(
+            value = "/authentication/assume-company",
+            response = String.class,
+            notes = "Assumes the identity of a company (requires that caller is a admin)",
+            httpMethod = "POST", produces = "application/json", consumes = "application/x-www-form-urlencoded")
+    @ApiResponses(value = {@ApiResponse(code = 401, message = "not authenticated or not authorized to assume company"),
+            @ApiResponse(code = 200, message = "company assumed")})
+    @JsonView(WaterJsonView.Public.class)
+    Map<String,String> assumeCompany(@FormParam("companyId") Long companyId);
 }
